@@ -1,0 +1,5 @@
+- Keep the app as a Vite-powered SPA with clean history URLs (`/`, `/lobby`, `/table`, `/statistics`). Use `appType: 'spa'` and history pushState for navigation.
+- Treat UI as modular fragments: each component/page lives in its own folder with `*.html`, `*.css`, and `*.js`, imported with `?raw` for HTML and direct CSS imports.
+- Header and footer render once; pages render into the `main` outlet. Prefer stateless render functions that receive `{language, t, applyTranslations, onLanguageChange, navigate}`.
+- Language selection must appear in the registration/home view, lobby, and table views. Persist selected language (localStorage) and reapply translations on route changes.
+- Avoid hash routing; rely on history fallback (index.html) for dev/preview. Keep URLs readable and side-effect free on navigation.

@@ -1,0 +1,7 @@
+.navbar-brand .badge {
+  letter-spacing: 0.08em;
+}
+
+.nav-link.active {
+  font-weight: 600;
+}

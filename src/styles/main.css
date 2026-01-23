@@ -1,0 +1,27 @@
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#app {
+  background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 40%, #f6f7fb 100%);
+}
+
+main {
+  flex: 1;
+}
+
+.hero {
+  background: radial-gradient(circle at top left, #e3f2fd 0%, #ffffff 50%);
+}
+
+.table-card {
+  border: 1px solid #dee2e6;
+  border-radius: 12px;
+  padding: 16px;
+  background-color: #ffffff;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+}
+
+.badge-pill {
+  border-radius: 999px;
+}

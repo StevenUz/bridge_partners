@@ -1,0 +1,31 @@
+<nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
+  <div class="container py-2">
+    <a class="navbar-brand d-flex align-items-center gap-2 fw-bold" href="/" data-brand>
+      <span class="badge bg-primary text-uppercase">Bridge</span>
+      <span data-i18n="brand"></span>
+    </a>
+    <button class="navbar-toggler" type="button" aria-label="Toggle navigation" data-nav-toggle>
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="mainNav">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0" data-nav-list>
+        <li class="nav-item">
+          <a class="nav-link" href="/" data-route="/" data-i18n="navHome"></a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/lobby" data-route="/lobby" data-i18n="navLobby"></a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/table" data-route="/table" data-i18n="navTable"></a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="/statistics" data-route="/statistics" data-i18n="navStats"></a>
+        </li>
+      </ul>
+      <div class="d-flex align-items-center gap-2">
+        <label class="form-label m-0 small text-muted" for="languagePicker" data-i18n="language"></label>
+        <select class="form-select form-select-sm" id="languagePicker" data-language-picker></select>
+      </div>
+    </div>
+  </div>
+</nav>
