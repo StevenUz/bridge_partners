@@ -1,6 +1,46 @@
 .seat-card {
-  border: 1px solid #dee2e6;
+  border: 1px solid #3b8a6a;
   border-radius: 12px;
   padding: 16px;
-  background: #fff;
+  background: #1d6049;
+  color: #f1f7f3;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.seat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  transition: left 0.5s ease;
+}
+
+.seat-card:hover::before {
+  left: 100%;
+}
+
+.seat-card:hover {
+  border-color: var(--velvet-bright);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.seat-card .badge {
+  transition: all 0.3s ease;
+}
+
+.seat-card:hover .badge {
+  transform: scale(1.05);
+}
+
+.seat-card h3 i {
+  transition: transform 0.3s ease;
+}
+
+.seat-card:hover h3 i {
+  transform: rotate(15deg) scale(1.15);
 }

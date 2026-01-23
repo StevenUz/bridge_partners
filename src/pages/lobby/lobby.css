@@ -1,5 +1,66 @@
 .seat-chip {
   border-radius: 999px;
   padding: 4px 10px;
-  background-color: #f1f3f5;
+  background-color: rgba(192, 57, 43, 0.16);
+  color: #f1f7f3;
+  border: 1px solid #3b8a6a;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.seat-chip:hover {
+  transform: scale(1.08);
+  background-color: rgba(192, 57, 43, 0.28);
+  border-color: var(--accent-red);
+  box-shadow: 0 4px 12px rgba(192, 57, 43, 0.3);
+  cursor: default;
+}
+
+/* Suits group styling */
+.suits-group {
+  display: inline-flex;
+  gap: 1px;
+  font-size: 0.9em;
+}
+
+.suits-group i {
+  transition: transform 0.2s ease;
+}
+
+.table-card:hover .suits-group i,
+h1:hover .suits-group i {
+  animation: cardBounce 0.5s ease;
+}
+
+@keyframes cardBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  25% {
+    transform: translateY(-3px);
+  }
+  50% {
+    transform: translateY(0);
+  }
+  75% {
+    transform: translateY(-2px);
+  }
+}
+
+/* Lobby-specific animations */
+.lobby-header {
+  animation: slideDown 0.5s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

@@ -1,3 +1,25 @@
+.bg-dark {
+  background: linear-gradient(180deg, #0f5d46 0%, #0d4a38 100%) !important;
+  border-top: 1px solid #3b8a6a;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
+}
+
 .footer-link {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(241, 247, 243, 0.82);
+  transition: all 0.3s ease;
+}
+
+.footer-link:hover {
+  color: #ffffff;
+  transform: translateY(-2px);
+}
+
+footer span {
+  transition: all 0.3s ease;
+}
+
+footer .fw-semibold:hover {
+  color: var(--accent-red) !important;
+  transform: scale(1.05);
+  cursor: default;
 }

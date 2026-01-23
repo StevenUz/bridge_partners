@@ -32,22 +32,8 @@ export const lobbyPage = {
 
     const grid = host.querySelector('[data-table-grid]');
     const createBtn = host.querySelector('[data-action="create-table"]');
-    const languagePicker = host.querySelector('[data-language-picker]');
-
-    Object.entries(languages).forEach(([value, label]) => {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = label;
-      languagePicker.append(option);
-    });
-    languagePicker.value = ctx.language;
 
     applyTranslations(host, ctx.language);
-
-    languagePicker.addEventListener('change', (event) => {
-      ctx.onLanguageChange(event.target.value);
-      applyTranslations(host, event.target.value);
-    });
 
     if (sampleTables.length >= 5) {
       createBtn.setAttribute('disabled', 'disabled');
@@ -73,15 +59,22 @@ export const lobbyPage = {
       col.innerHTML = `
         <div class="table-card h-100 d-flex flex-column">
           <div class="d-flex justify-content-between align-items-center mb-2">
-            <h3 class="h5 mb-0">${table.name}</h3>
-            <span class="badge bg-secondary">${players}/4</span>
+            <h3 class="h5 mb-0">
+              <span class="suits-group me-2">
+                <i class="bi bi-suit-club-fill"></i><i class="bi bi-suit-diamond-fill text-danger"></i><i class="bi bi-suit-heart-fill text-danger"></i><i class="bi bi-suit-spade-fill"></i>
+              </span>
+              ${table.name}
+            </h3>
+            <span class="badge bg-secondary"><i class="bi bi-people-fill me-1"></i>${players}/4</span>
           </div>
           <p class="small text-muted mb-2" data-i18n="tableSeats"></p>
           <div class="d-flex flex-wrap gap-2 mb-3">${seatsMarkup}</div>
-          <button class="btn btn-primary w-100" data-action="join" data-id="${table.id}">${ctx.t('tableJoin')}</button>
+          <button class="btn btn-primary w-100" data-action="join" data-id="${table.id}">
+            <i class="bi bi-box-arrow-in-right me-2"></i>${ctx.t('tableJoin')}
+          </button>
           <div class="d-flex justify-content-between align-items-center text-muted small mt-2">
-            <span>${ctx.t('tablePlayers')}: ${players}/4</span>
-            <span>${ctx.t('tableObservers')}: ${table.observers}</span>
+            <span><i class="bi bi-person-fill me-1"></i>${ctx.t('tablePlayers')}: ${players}/4</span>
+            <span><i class="bi bi-eye-fill me-1"></i>${ctx.t('tableObservers')}: ${table.observers}</span>
           </div>
         </div>
       `;

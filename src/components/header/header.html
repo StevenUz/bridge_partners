@@ -1,6 +1,12 @@
 <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
   <div class="container py-2">
     <a class="navbar-brand d-flex align-items-center gap-2 fw-bold" href="/" data-brand>
+      <div class="suit-icons d-flex gap-1">
+        <i class="bi bi-suit-club-fill text-dark"></i>
+        <i class="bi bi-suit-diamond-fill text-danger"></i>
+        <i class="bi bi-suit-heart-fill text-danger"></i>
+        <i class="bi bi-suit-spade-fill text-dark"></i>
+      </div>
       <span class="badge bg-primary text-uppercase">Bridge</span>
       <span data-i18n="brand"></span>
     </a>
@@ -10,20 +16,17 @@
     <div class="collapse navbar-collapse" id="mainNav">
       <ul class="navbar-nav me-auto mb-2 mb-lg-0" data-nav-list>
         <li class="nav-item">
-          <a class="nav-link" href="/" data-route="/" data-i18n="navHome"></a>
+          <a class="nav-link" href="/" data-route="/"><i class="bi bi-house-door me-1"></i><span data-i18n="navHome"></span></a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="/lobby" data-route="/lobby" data-i18n="navLobby"></a>
+          <a class="nav-link" href="/lobby" data-route="/lobby"><i class="bi bi-door-open me-1"></i><span data-i18n="navLobby"></span></a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="/table" data-route="/table" data-i18n="navTable"></a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="/statistics" data-route="/statistics" data-i18n="navStats"></a>
+          <a class="nav-link" href="/statistics" data-route="/statistics"><i class="bi bi-graph-up me-1"></i><span data-i18n="navStats"></span></a>
         </li>
       </ul>
       <div class="d-flex align-items-center gap-2">
-        <label class="form-label m-0 small text-muted" for="languagePicker" data-i18n="language"></label>
+        <i class="bi bi-globe2"></i>
         <select class="form-select form-select-sm" id="languagePicker" data-language-picker></select>
       </div>
     </div>

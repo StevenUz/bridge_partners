@@ -3,10 +3,10 @@ import './table.css';
 import { applyTranslations, languages } from '../../i18n/i18n.js';
 
 const seats = [
-  { id: 'south', player: 'You' },
-  { id: 'west', player: 'Open' },
-  { id: 'north', player: 'Open' },
-  { id: 'east', player: 'Open' }
+  { id: 'south', player: 'You', icon: 'bi-arrow-down-circle' },
+  { id: 'west', player: 'Open', icon: 'bi-arrow-left-circle' },
+  { id: 'north', player: 'Open', icon: 'bi-arrow-up-circle' },
+  { id: 'east', player: 'Open', icon: 'bi-arrow-right-circle' }
 ];
 
 export const tablePage = {
@@ -41,14 +41,24 @@ export const tablePage = {
       const col = document.createElement('div');
       col.className = 'col-12 col-md-6';
 
+      const seatLabel = ctx.t(`seat${seat.id.charAt(0).toUpperCase()}${seat.id.slice(1)}`);
+      const isOccupied = seat.player !== 'Open';
+      const statusIcon = isOccupied ? 'bi-check-circle-fill' : 'bi-circle';
+
       col.innerHTML = `
         <div class="seat-card h-100 d-flex flex-column gap-2">
           <div class="d-flex align-items-center justify-content-between">
-            <h3 class="h6 mb-0">${ctx.t(`seat${seat.id.charAt(0).toUpperCase()}${seat.id.slice(1)}`)}</h3>
-            <span class="badge ${seat.player === 'Open' ? 'bg-warning text-dark' : 'bg-success'}">${seat.player}</span>
+            <h3 class="h6 mb-0">
+              <i class="${seat.icon} me-2"></i>${seatLabel}
+            </h3>
+            <span class="badge ${seat.player === 'Open' ? 'bg-warning text-dark' : 'bg-success'}">
+              <i class="${statusIcon} me-1"></i>${seat.player}
+            </span>
           </div>
-          <p class="small text-muted mb-2">${ctx.t('tableJoinAs')}</p>
-          <button class="btn btn-outline-primary" ${seat.player !== 'Open' ? 'disabled' : ''}>${ctx.t('tableJoin')}</button>
+          <p class="small text-muted mb-2"><i class="bi bi-info-circle me-1"></i>${ctx.t('tableJoinAs')}</p>
+          <button class="btn btn-outline-primary" ${seat.player !== 'Open' ? 'disabled' : ''}>
+            <i class="bi bi-box-arrow-in-right me-2"></i>${ctx.t('tableJoin')}
+          </button>
         </div>
       `;
 
