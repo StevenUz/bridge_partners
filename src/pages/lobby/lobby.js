@@ -20,6 +20,13 @@ const sampleTables = [
   }
 ];
 
+// Simple in-memory chat for the lobby
+const lobbyChatMessages = [
+  { author: 'Elena', text: 'Welcome to the lobby!' },
+  { author: 'Marco', text: 'Table 1 needs a North.' },
+  { author: 'Sara', text: 'Looking for a quick game.' }
+];
+
 export const lobbyPage = {
   path: '/lobby',
   name: 'lobby',
@@ -149,6 +156,66 @@ joinBtn.addEventListener('click', () => {
 
       grid.append(col);
     });
+
+    // Render lobby chat panel
+    const chatPanel = document.createElement('div');
+    chatPanel.className = 'chat-panel mt-4';
+    chatPanel.innerHTML = `
+      <div class="chat-header">
+        <i class="bi bi-chat-dots me-2"></i><span data-i18n="chatLobby"></span>
+      </div>
+      <div class="chat-body" data-chat-body></div>
+      <div class="chat-input d-flex gap-2">
+        <input type="text" class="form-control form-control-sm" data-chat-input maxlength="50" placeholder="${ctx.t('chatPlaceholder')}">
+        <button class="btn btn-primary btn-sm" data-chat-send>${ctx.t('chatSend')}</button>
+      </div>
+    `;
+
+    const chatBody = chatPanel.querySelector('[data-chat-body]');
+    const chatInput = chatPanel.querySelector('[data-chat-input]');
+    const chatSend = chatPanel.querySelector('[data-chat-send]');
+
+    function renderChat() {
+      const lastMessages = lobbyChatMessages.slice(-15);
+      chatBody.innerHTML = lastMessages
+        .map((msg) => `<div class="chat-message"><strong>${msg.author}:</strong> ${msg.text}</div>`)
+        .join('');
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+
+    function addMessage(text) {
+      if (!text) return;
+      lobbyChatMessages.push({ author: 'You', text });
+      if (lobbyChatMessages.length > 15) lobbyChatMessages.shift();
+      renderChat();
+    }
+
+    chatSend.addEventListener('click', () => {
+      const value = chatInput.value.trim().slice(0, 50);
+      if (!value) return;
+      addMessage(value);
+      chatInput.value = '';
+    });
+
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        chatSend.click();
+      }
+    });
+
+    renderChat();
+    applyTranslations(chatPanel, ctx.language);
+
+    const chatRow = document.createElement('div');
+    chatRow.className = 'row g-3 chat-row';
+    const chatCol = document.createElement('div');
+    chatCol.className = 'col-12 col-md-12 col-lg-12';
+    chatCol.append(chatPanel);
+    chatRow.append(chatCol);
+
+    const innerContainer = host.querySelector('.container');
+    innerContainer.append(chatRow);
 
     container.append(host);
   }

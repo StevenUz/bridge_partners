@@ -15,6 +15,19 @@ const currentTable = {
   observers: ['Peter', 'Maya']
 };
 
+// Simple in-memory chats
+const lobbyChatMessages = [
+  { author: 'Elena', text: 'Lobby chat is visible to everyone.' },
+  { author: 'Marco', text: 'Ready to start soon.' }
+];
+
+const tableChatMessages = [
+  { author: 'Ivan', text: 'Good luck!' },
+  { author: 'Maria', text: 'Let’s play fair.' }
+];
+
+const MAX_CHAT_MESSAGES = 15;
+
 // Get player position from URL or default to south for observer
 function getPlayerPosition() {
   const params = new URLSearchParams(window.location.search);
@@ -165,6 +178,7 @@ export const tablePage = {
 
     // Render observers section
     const observersSection = host.querySelector('[data-observers-section]');
+    const containerDiv = host.querySelector('.container');
     if (observersSection) {
       const hasObservers = currentTable.observers.length > 0;
       observersSection.innerHTML = `
@@ -181,6 +195,113 @@ export const tablePage = {
           </span>
         </div>
       `;
+    }
+
+
+    // Chat drawer (lobby + table chat)
+    const chatDrawer = document.createElement('div');
+    chatDrawer.className = 'chat-drawer open';
+    chatDrawer.innerHTML = `
+      <div class="chat-drawer-header" data-chat-header>
+        <button class="chat-toggle" data-chat-toggle>
+          <i class="bi bi-chat-dots"></i>
+        </button>
+        <div class="chat-tabs">
+          <button class="chat-tab active" data-chat-tab="table"><span data-i18n="chatTable"></span></button>
+          <button class="chat-tab" data-chat-tab="lobby"><span data-i18n="chatLobby"></span></button>
+        </div>
+      </div>
+      <div class="chat-drawer-body" data-chat-body-wrapper>
+        <div class="chat-body" data-chat-body></div>
+        <div class="chat-input d-flex gap-2">
+          <input type="text" class="form-control form-control-sm" data-chat-input maxlength="50" placeholder="${ctx.t('chatPlaceholder')}">
+          <button class="btn btn-primary btn-sm" data-chat-send>${ctx.t('chatSend')}</button>
+        </div>
+      </div>
+    `;
+
+    let activeTab = 'table';
+    let isOpen = true;
+
+    const chatBody = chatDrawer.querySelector('[data-chat-body]');
+    const chatInput = chatDrawer.querySelector('[data-chat-input]');
+    const chatSend = chatDrawer.querySelector('[data-chat-send]');
+    const chatHeader = chatDrawer.querySelector('[data-chat-header]');
+    const toggleBtn = chatDrawer.querySelector('[data-chat-toggle]');
+    const tabButtons = chatDrawer.querySelectorAll('[data-chat-tab]');
+
+    function trimMessages(list) {
+      while (list.length > MAX_CHAT_MESSAGES) list.shift();
+    }
+
+    function renderChat() {
+      const source = activeTab === 'table' ? tableChatMessages : lobbyChatMessages;
+      const lastMessages = source.slice(-MAX_CHAT_MESSAGES);
+      chatBody.innerHTML = lastMessages
+        .map((msg) => `<div class="chat-message"><strong>${msg.author}:</strong> ${msg.text}</div>`)
+        .join('');
+      chatBody.scrollTop = chatBody.scrollHeight;
+      chatHeader.classList.remove('blink');
+    }
+
+    function addMessage(text) {
+      if (!text) return;
+      const target = activeTab === 'table' ? tableChatMessages : lobbyChatMessages;
+      target.push({ author: 'You', text });
+      trimMessages(target);
+      renderChat();
+    }
+
+    tabButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        activeTab = btn.dataset.chatTab;
+        tabButtons.forEach((b) => b.classList.toggle('active', b === btn));
+        renderChat();
+      });
+    });
+
+    toggleBtn.addEventListener('click', () => {
+      isOpen = !isOpen;
+      chatDrawer.classList.toggle('open', isOpen);
+      if (isOpen) {
+        chatHeader.classList.remove('blink');
+        renderChat();
+      }
+    });
+
+    chatSend.addEventListener('click', () => {
+      const value = chatInput.value.trim().slice(0, 50);
+      if (!value) return;
+      addMessage(value);
+      chatInput.value = '';
+    });
+
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        chatSend.click();
+      }
+    });
+
+    // Simulate blink on new message when drawer is closed or tab is inactive
+    function simulateIncomingMessage(text, tab) {
+      const target = tab === 'table' ? tableChatMessages : lobbyChatMessages;
+      target.push({ author: tab === 'table' ? 'Teammate' : 'Lobby', text });
+      trimMessages(target);
+      if (!isOpen || activeTab !== tab) {
+        chatHeader.classList.add('blink');
+      }
+      renderChat();
+    }
+
+    // Initial render
+    renderChat();
+    applyTranslations(chatDrawer, ctx.language);
+
+    if (containerDiv) {
+      containerDiv.append(chatDrawer);
+    } else {
+      host.append(chatDrawer);
     }
 
     applyTranslations(host, ctx.language);
