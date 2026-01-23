@@ -1,3 +1,77 @@
+/* Bridge table layout styling */
+.bridge-table-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(15, 93, 70, 0.3);
+  border-radius: 8px;
+  border: 1px solid #3b8a6a;
+}
+
+.seat-row-middle {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.seat-position {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #3b8a6a;
+  background: rgba(29, 96, 73, 0.6);
+  transition: all 0.3s ease;
+  min-width: 100px;
+  flex: 1;
+}
+
+.seat-position.north,
+.seat-position.south {
+  align-self: center;
+  width: 60%;
+}
+
+.seat-position.empty {
+  border-style: dashed;
+  background: rgba(29, 96, 73, 0.3);
+  opacity: 0.7;
+}
+
+.seat-position.occupied {
+  border-color: var(--velvet-bright);
+  background: rgba(45, 138, 102, 0.4);
+}
+
+.seat-position:hover {
+  transform: scale(1.02);
+  border-color: var(--velvet-bright);
+  box-shadow: 0 4px 12px rgba(45, 138, 102, 0.3);
+}
+
+.seat-label {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #ffc107;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  letter-spacing: 0.05em;
+}
+
+.player-name {
+  font-size: 0.85rem;
+  color: #f1f7f3;
+  font-weight: 500;
+}
+
+.seat-position.empty .player-name {
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 400;
+}
+
 .seat-chip {
   border-radius: 999px;
   padding: 4px 10px;
@@ -34,6 +108,64 @@ h1:hover .suits-group i {
   animation: cardBounce 0.5s ease;
 }
 
+/* Observer indicator styling */
+.observer-indicator {
+  cursor: default;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.observer-indicator.has-observers {
+  cursor: help;
+  color: #ffc107 !important;
+}
+
+.observer-indicator.has-observers:hover {
+  transform: scale(1.1);
+  filter: brightness(1.2);
+}
+
+.observer-indicator.has-observers i {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Custom tooltip for observers */
+.observer-indicator.has-observers::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  background: rgba(29, 96, 73, 0.98);
+  color: #f1f7f3;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  border: 1px solid #3b8a6a;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+
+.observer-indicator.has-observers:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-12px);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
 @keyframes cardBounce {
   0%, 100% {
     transform: translateY(0);
@@ -58,6 +190,79 @@ h1:hover .suits-group i {
   from {
     opacity: 0;
     transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Limit modal styling */
+.limit-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.limit-modal {
+  background: linear-gradient(135deg, rgba(29, 96, 73, 0.98) 0%, rgba(26, 87, 68, 0.98) 100%);
+  border: 2px solid #3b8a6a;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  max-width: 500px;
+  width: 90%;
+  animation: slideInUp 0.4s ease-out;
+  overflow: hidden;
+}
+
+.limit-modal-header {
+  display: flex;
+  align-items: center;
+  padding: 20px 24px;
+  background: rgba(15, 93, 70, 0.6);
+  border-bottom: 1px solid #3b8a6a;
+}
+
+.limit-modal-header h5 {
+  color: #f1f7f3;
+  margin: 0;
+  font-weight: 600;
+}
+
+.limit-modal-header i {
+  font-size: 1.5rem;
+}
+
+.limit-modal-body {
+  padding: 24px;
+  color: #f1f7f3;
+  line-height: 1.6;
+}
+
+.limit-modal-body p {
+  margin: 0;
+}
+
+.limit-modal-footer {
+  padding: 16px 24px;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 93, 70, 0.4);
+  border-top: 1px solid #3b8a6a;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
   }
   to {
     opacity: 1;

@@ -10,7 +10,10 @@ export const routes = [
   statisticsPage
 ];
 
-export function matchRoute(pathname) {
+export function matchRoute(path) {
+  // Ensure we match only against the pathname, ignoring any query string.
+  const url = new URL(path, window.location.origin);
+  const pathname = url.pathname;
   const cleanPath = pathname.endsWith('/') && pathname !== '/' ? pathname.slice(0, -1) : pathname;
   return routes.find((route) => route.path === cleanPath) ?? homePage;
 }

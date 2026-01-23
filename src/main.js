@@ -19,7 +19,7 @@ app.append(headerHost, mainHost, footerHost);
 
 const state = {
   language: getLanguage(),
-  currentRoute: matchRoute(window.location.pathname)
+  currentRoute: matchRoute(window.location.pathname + window.location.search)
 };
 
 let cleanupPage = null;
@@ -74,19 +74,20 @@ function renderPage({ skipHistory = false } = {}) {
 function navigate(path) {
   const targetRoute = matchRoute(path);
   if (state.currentRoute.path === targetRoute.path) {
-    history.pushState({}, '', targetRoute.path);
+    history.pushState({}, '', path);
     renderPage({ skipHistory: true });
     return;
   }
 
   state.currentRoute = targetRoute;
-  history.pushState({}, '', targetRoute.path);
+  history.pushState({}, '', path);
   renderHeader();
   renderPage({ skipHistory: true });
 }
 
 window.addEventListener('popstate', () => {
-  state.currentRoute = matchRoute(window.location.pathname);
+  const fullPath = window.location.pathname + window.location.search;
+  state.currentRoute = matchRoute(fullPath);
   renderHeader();
   renderPage({ skipHistory: true });
 });
