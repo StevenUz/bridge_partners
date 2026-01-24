@@ -222,6 +222,39 @@
   gap: 0;
 }
 
+/* HCP label */
+.hcp-label {
+  position: absolute;
+  background: rgba(31, 156, 117, 0.25);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 0.2rem 0.6rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.hcp-south,
+.hcp-north {
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.hcp-west {
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+}
+
+.hcp-east {
+  top: 50%;
+  left: 6px;
+  transform: translateY(-50%);
+}
+
 .hand-west,
 .hand-east {
   flex-direction: column;

@@ -32,6 +32,12 @@ const MAX_CHAT_MESSAGES = 15;
 // Card game state
 let currentDeal = null;
 let dealNumber = 1;
+let hcpScores = { north: 0, east: 0, south: 0, west: 0 };
+
+function computeHCP(hand) {
+  const values = { A: 4, K: 3, Q: 2, J: 1 };
+  return hand.reduce((sum, card) => sum + (values[card.rank] || 0), 0);
+}
 
 // Get player position from URL
 function getPlayerPosition() {
@@ -109,54 +115,90 @@ export const tablePage = {
     if (dealBtn) {
       dealBtn.addEventListener('click', () => {
         currentDeal = dealCards(dealNumber);
+        // Calculate HCP for all hands and store for the current deal
+        hcpScores.north = computeHCP(currentDeal.hands.north);
+        hcpScores.east  = computeHCP(currentDeal.hands.east);
+        hcpScores.south = computeHCP(currentDeal.hands.south);
+        hcpScores.west  = computeHCP(currentDeal.hands.west);
         dealNumber++;
         
         // Render hands
         const isRedBack = currentDeal.isEvenDeal;
 
-        // North
+        // Build visual mapping based on viewer position
+        const order = ['north','east','south','west'];
+        const idx = Math.max(0, order.indexOf(viewPosition));
+        const bottomSeat = viewPosition === 'observer' || idx === -1 ? 'south' : order[idx];
+        const opposite = (s) => ({ north:'south', south:'north', east:'west', west:'east' }[s]);
+        const nextClockwise = (s) => order[(order.indexOf(s) + 1) % 4];
+        const prevClockwise = (s) => order[(order.indexOf(s) + 3) % 4];
+        const topSeat = opposite(bottomSeat);
+        const leftSeat = nextClockwise(bottomSeat);
+        const rightSeat = prevClockwise(bottomSeat);
+
+        // North (top visual)
         const northContainer = host.querySelector('[data-cards-north]');
         northContainer.innerHTML = '';
+        const northHcpLabel = document.createElement('div');
+        northHcpLabel.className = 'hcp-label hcp-north';
+        northHcpLabel.innerHTML = `${currentTable.players[topSeat]}: ${hcpScores[topSeat]}`;
+        northContainer.appendChild(northHcpLabel);
         const northHand = createCardDisplay(
-          currentDeal.hands.north,
+          currentDeal.hands[topSeat],
           'north',
-          isObserver,
+          isObserver || viewPosition === topSeat,
           isRedBack
         );
         northContainer.appendChild(northHand);
+        applyTranslations(northContainer, ctx.language);
 
-        // South
+        // South (bottom visual)
         const southContainer = host.querySelector('[data-cards-south]');
         southContainer.innerHTML = '';
+        const southHcpLabel = document.createElement('div');
+        southHcpLabel.className = 'hcp-label hcp-south';
+        southHcpLabel.innerHTML = `${currentTable.players[bottomSeat]}: ${hcpScores[bottomSeat]}`;
+        southContainer.appendChild(southHcpLabel);
         const southHand = createCardDisplay(
-          currentDeal.hands.south,
+          currentDeal.hands[bottomSeat],
           'south',
-          viewPosition === 'south' || isObserver,
+          isObserver || viewPosition === bottomSeat,
           isRedBack
         );
         southContainer.appendChild(southHand);
+        applyTranslations(southContainer, ctx.language);
 
-        // West
+        // West (left visual)
         const westContainer = host.querySelector('[data-cards-west]');
         westContainer.innerHTML = '';
+        const westHcpLabel = document.createElement('div');
+        westHcpLabel.className = 'hcp-label hcp-west';
+        westHcpLabel.innerHTML = `${currentTable.players[leftSeat]}: ${hcpScores[leftSeat]}`;
+        westContainer.appendChild(westHcpLabel);
         const westHand = createCardDisplay(
-          currentDeal.hands.west,
+          currentDeal.hands[leftSeat],
           'west',
-          isObserver,
+          isObserver || viewPosition === leftSeat,
           isRedBack
         );
         westContainer.appendChild(westHand);
+        applyTranslations(westContainer, ctx.language);
 
-        // East
+        // East (right visual)
         const eastContainer = host.querySelector('[data-cards-east]');
         eastContainer.innerHTML = '';
+        const eastHcpLabel = document.createElement('div');
+        eastHcpLabel.className = 'hcp-label hcp-east';
+        eastHcpLabel.innerHTML = `${currentTable.players[rightSeat]}: ${hcpScores[rightSeat]}`;
+        eastContainer.appendChild(eastHcpLabel);
         const eastHand = createCardDisplay(
-          currentDeal.hands.east,
+          currentDeal.hands[rightSeat],
           'east',
-          isObserver,
+          isObserver || viewPosition === rightSeat,
           isRedBack
         );
         eastContainer.appendChild(eastHand);
+        applyTranslations(eastContainer, ctx.language);
 
         // Hide deal button, show game info
         dealBtn.style.display = 'none';
