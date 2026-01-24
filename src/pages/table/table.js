@@ -34,9 +34,9 @@ function isHigherBid(candidate, lastBid) {
 const currentTable = {
   id: 1,
   players: {
+    north: 'Marco',
     south: 'Elena',
-    west: 'Marco',
-    north: 'Ivan',
+    west: 'Ivan',
     east: 'Maria'
   },
   observers: ['Peter', 'Maya']
@@ -61,6 +61,43 @@ let dealNumber = 1;
 let hcpScores = { north: 0, east: 0, south: 0, west: 0 };
 let biddingState = null;
 
+// Track ready state for each player
+const playerReadyState = {
+  north: false,
+  south: false,
+  west: false,
+  east: false
+};
+
+function loadReadyState(tableId) {
+  try {
+    const raw = localStorage.getItem(`tableReadyState:${tableId}`);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch (err) {
+    console.warn('Failed to load ready state', err);
+    return {};
+  }
+}
+
+function persistReadyState(tableId, state) {
+  try {
+    localStorage.setItem(`tableReadyState:${tableId}`, JSON.stringify(state));
+  } catch (err) {
+    console.warn('Failed to persist ready state', err);
+  }
+}
+
+function syncReadyState(tableId, playerReadyState) {
+  const stored = loadReadyState(tableId);
+  ['north', 'south', 'east', 'west'].forEach((seat) => {
+    if (typeof stored[seat] === 'boolean') {
+      playerReadyState[seat] = stored[seat];
+    }
+  });
+}
+
 function computeHCP(hand) {
   const values = { A: 4, K: 3, Q: 2, J: 1 };
   return hand.reduce((sum, card) => sum + (values[card.rank] || 0), 0);
@@ -69,7 +106,8 @@ function computeHCP(hand) {
 // Get player position from URL
 function getPlayerPosition() {
   const params = new URLSearchParams(window.location.search);
-  return params.get('position') || 'observer';
+  // Default to Marco's seat (north) when no position is provided so preview renders from his perspective
+  return params.get('position') || 'north';
 }
 
 function createCardDisplay(hand, position, faceVisible, isRedBack) {
@@ -92,6 +130,7 @@ export const tablePage = {
     host.innerHTML = template;
 
     const viewPosition = getPlayerPosition();
+    const viewerSeat = viewPosition === 'observer' ? null : viewPosition;
     const isObserver = true; // TEMP: show all hands as observer for tuning
 
     const seatLabels = {
@@ -128,11 +167,132 @@ export const tablePage = {
 
     applyTranslations(host, ctx.language);
 
+    // Hydrate ready state from storage
+    syncReadyState(currentTable.id, playerReadyState);
+
     // Start hourglass spinning animation immediately (waiting for players to be ready)
     const hourglassIcon = host.querySelector('[data-hourglass-icon]');
     if (hourglassIcon) {
       hourglassIcon.classList.add('hourglass-spinning');
     }
+
+    // Render seated players in waiting view
+    const positionLabels = {
+      north: ctx.t('seatNorth'),
+      south: ctx.t('seatSouth'),
+      west: ctx.t('seatWest'),
+      east: ctx.t('seatEast')
+    };
+
+    const visualPanels = {
+      north: host.querySelector('[data-player-position="north"]'),
+      south: host.querySelector('[data-player-position="south"]'),
+      west: host.querySelector('[data-player-position="west"]'),
+      east: host.querySelector('[data-player-position="east"]')
+    };
+
+    const seatingOrder = ['north', 'east', 'south', 'west'];
+    const viewerIdx = viewerSeat ? seatingOrder.indexOf(viewerSeat) : -1;
+    const bottomSeat = viewerIdx >= 0 ? seatingOrder[viewerIdx] : 'south';
+    const opposite = (s) => ({ north:'south', south:'north', east:'west', west:'east' }[s]);
+    const nextClockwise = (s) => seatingOrder[(seatingOrder.indexOf(s) + 1) % 4];
+    const prevClockwise = (s) => seatingOrder[(seatingOrder.indexOf(s) + 3) % 4];
+    const topSeat = opposite(bottomSeat);
+    const leftSeat = nextClockwise(bottomSeat);
+    const rightSeat = prevClockwise(bottomSeat);
+
+    const slotMapping = [
+      { slot: 'south', seat: bottomSeat },
+      { slot: 'north', seat: topSeat },
+      { slot: 'west',  seat: leftSeat },
+      { slot: 'east',  seat: rightSeat }
+    ];
+
+    const syncReadyUI = () => {
+      syncReadyState(currentTable.id, playerReadyState);
+      const toggles = host.querySelectorAll('[data-ready-toggle]');
+      toggles.forEach((tg) => {
+        const seat = tg.getAttribute('data-ready-toggle');
+        if (!seat) return;
+        if (playerReadyState[seat]) tg.classList.add('enabled'); else tg.classList.remove('enabled');
+      });
+      checkAllPlayersReady();
+    };
+
+    slotMapping.forEach(({ slot, seat }) => {
+      const panel = visualPanels[slot];
+      if (!panel || !seat) return;
+      panel.innerHTML = '';
+      const playerName = currentTable.players[seat];
+      const btn = document.createElement('button');
+      btn.className = 'player-name-button';
+      btn.textContent = `${positionLabels[seat]} – ${playerName}`;
+      btn.type = 'button';
+      panel.appendChild(btn);
+
+      // Create ready toggle container
+      const readyContainer = document.createElement('div');
+      readyContainer.className = 'player-ready-container';
+      readyContainer.textContent = ctx.language === 'bg' ? 'Готов/а?' : 'Ready?';
+
+      const toggle = document.createElement('div');
+      const isViewerSeat = viewerSeat === seat;
+      const enabledClass = playerReadyState[seat] ? 'enabled' : '';
+      toggle.className = `toggle-switch ${isViewerSeat ? '' : 'disabled'} ${enabledClass}`.trim();
+      toggle.setAttribute('data-ready-toggle', seat);
+      toggle.innerHTML = '<div class="toggle-switch-knob"></div>';
+
+      // Only current viewer seat can toggle
+      if (isViewerSeat) {
+        toggle.addEventListener('click', () => {
+          const isEnabled = toggle.classList.contains('enabled');
+          if (isEnabled) {
+            toggle.classList.remove('enabled');
+            playerReadyState[seat] = false;
+          } else {
+            toggle.classList.add('enabled');
+            playerReadyState[seat] = true;
+          }
+          persistReadyState(currentTable.id, playerReadyState);
+          checkAllPlayersReady();
+        });
+      }
+
+      readyContainer.appendChild(toggle);
+      panel.appendChild(readyContainer);
+    });
+    
+    // Check if all players are ready
+    const checkAllPlayersReady = () => {
+      const allReady = Object.values(playerReadyState).every((r) => r === true);
+      const dealBtn = host.querySelector('[data-action="deal-cards"]');
+      const dealerSeat = seatOrder[0]; // Dealer for first round (actual seat)
+      const isDealerViewer = dealerSeat === viewerSeat;
+
+      if (dealBtn) {
+        if (allReady && isDealerViewer) {
+          dealBtn.disabled = false;
+          dealBtn.classList.add('dealer-ready');
+        } else {
+          dealBtn.disabled = true;
+          dealBtn.classList.remove('dealer-ready');
+        }
+      }
+    };
+    
+    // Initialize check
+    syncReadyUI();
+
+    // Listen for storage updates from other tabs to sync ready state in near real time
+    const storageHandler = (event) => {
+      if (event.key === `tableReadyState:${currentTable.id}`) {
+        syncReadyUI();
+      }
+    };
+    window.addEventListener('storage', storageHandler);
+
+    // Fallback polling to keep state fresh if storage events are missed
+    const readySyncInterval = setInterval(syncReadyUI, 2000);
 
     // Back button
     const backBtn = host.querySelector('[data-action="back-lobby"]');
@@ -179,6 +339,14 @@ export const tablePage = {
 
     if (dealBtn) {
       dealBtn.addEventListener('click', () => {
+        // Reset ready state for next round
+        ['north', 'south', 'east', 'west'].forEach((seat) => {
+          playerReadyState[seat] = false;
+        });
+        persistReadyState(currentTable.id, playerReadyState);
+        const readyToggles = host.querySelectorAll('.toggle-switch');
+        readyToggles.forEach((tg) => tg.classList.remove('enabled'));
+
         currentDeal = dealCards(dealNumber);
         // Calculate HCP for all hands and store for the current deal
         hcpScores.north = computeHCP(currentDeal.hands.north);
@@ -194,6 +362,12 @@ export const tablePage = {
         if (hourglassIcon) {
           hourglassIcon.classList.add('hourglass-spinning');
         }
+
+        // Hide player position panels and deal button, show bidding panel
+        ['north', 'south', 'west', 'east'].forEach(position => {
+          const panel = host.querySelector(`[data-player-position="${position}"]`);
+          if (panel) panel.style.display = 'none';
+        });
         
         // Render hands
         const isRedBack = currentDeal.isEvenDeal;
