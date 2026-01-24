@@ -5,7 +5,8 @@ export function createCardElement(card, faceVisible = true, isRedBack = false) {
   container.className = 'playing-card';
 
   if (faceVisible) {
-    const suitClass = card.isRed() ? 'red' : 'black';
+    const isRed = typeof card.isRed === 'function' ? card.isRed() : (card.suit === 'D' || card.suit === 'H' || card.suit === '♦' || card.suit === '♥');
+    const suitClass = isRed ? 'red' : 'black';
     container.innerHTML = `
       <div class="card-inner">
         <div class="card-face ${suitClass}">

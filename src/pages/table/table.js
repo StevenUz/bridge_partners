@@ -98,6 +98,44 @@ function syncReadyState(tableId, playerReadyState) {
   });
 }
 
+function persistDealState(tableId, dealState) {
+  try {
+    localStorage.setItem(`tableDealState:${tableId}`, JSON.stringify(dealState));
+  } catch (err) {
+    console.warn('Failed to persist deal state', err);
+  }
+}
+
+function loadDealState(tableId) {
+  try {
+    const raw = localStorage.getItem(`tableDealState:${tableId}`);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn('Failed to load deal state', err);
+    return null;
+  }
+}
+
+function persistBiddingState(tableId, biddingState) {
+  try {
+    localStorage.setItem(`tableBiddingState:${tableId}`, JSON.stringify(biddingState));
+  } catch (err) {
+    console.warn('Failed to persist bidding state', err);
+  }
+}
+
+function loadBiddingState(tableId) {
+  try {
+    const raw = localStorage.getItem(`tableBiddingState:${tableId}`);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn('Failed to load bidding state', err);
+    return null;
+  }
+}
+
 function computeHCP(hand) {
   const values = { A: 4, K: 3, Q: 2, J: 1 };
   return hand.reduce((sum, card) => sum + (values[card.rank] || 0), 0);
@@ -131,7 +169,7 @@ export const tablePage = {
 
     const viewPosition = getPlayerPosition();
     const viewerSeat = viewPosition === 'observer' ? null : viewPosition;
-    const isObserver = true; // TEMP: show all hands as observer for tuning
+    const isObserver = false; // Show only own cards
 
     const seatLabels = {
       south: ctx.t('seatSouth'),
@@ -207,6 +245,297 @@ export const tablePage = {
       { slot: 'west',  seat: leftSeat },
       { slot: 'east',  seat: rightSeat }
     ];
+
+    const renderDealAndBidding = () => {
+      const storedDeal = loadDealState(currentTable.id);
+      const storedBidding = loadBiddingState(currentTable.id);
+      if (!storedDeal) return; // No deal yet
+
+      // Hide ready panels
+      ['north', 'south', 'west', 'east'].forEach(position => {
+        const panel = host.querySelector(`[data-player-position="${position}"]`);
+        if (panel) panel.style.display = 'none';
+      });
+
+      currentDeal = {
+        dealNumber: storedDeal.dealNumber,
+        hands: storedDeal.hands,
+        isEvenDeal: storedDeal.isEvenDeal
+      };
+      hcpScores = storedDeal.hcpScores || { north: 0, east: 0, south: 0, west: 0 };
+
+      const isRedBack = currentDeal.isEvenDeal;
+
+      // Render hands for all four slots
+      const renderHandForSlot = (slotName, seatName) => {
+        const container = host.querySelector(`[data-cards-${slotName}]`);
+        if (!container) return;
+        container.innerHTML = '';
+        const hcpLabel = document.createElement('div');
+        hcpLabel.className = `hcp-label hcp-${slotName}`;
+        hcpLabel.innerHTML = `${currentTable.players[seatName]}: ${hcpScores[seatName]}`;
+        container.appendChild(hcpLabel);
+        
+        // Only render actual cards if this is the viewer's own seat
+        if (viewerSeat === seatName) {
+          const hand = createCardDisplay(
+            currentDeal.hands[seatName],
+            slotName,
+            true, // Always show viewer's own cards face-up
+            isRedBack
+          );
+          container.appendChild(hand);
+        }
+      };
+
+      renderHandForSlot('north', topSeat);
+      renderHandForSlot('south', bottomSeat);
+      renderHandForSlot('west', leftSeat);
+      renderHandForSlot('east', rightSeat);
+
+      // Restore bidding if available
+      if (storedBidding) {
+        biddingState = storedBidding;
+        const dealerSeat = seatOrder[(currentDeal.dealNumber - 1) % seatOrder.length];
+        if (!biddingState.dealer) biddingState.dealer = dealerSeat;
+        if (!biddingState.currentSeat) biddingState.currentSeat = dealerSeat;
+
+        // Render bidding panel (copy from deal button logic)
+        const biddingTemplate = document.createElement('div');
+        biddingTemplate.className = 'bidding-panel';
+        biddingTemplate.innerHTML = `
+          <div class="bidding-left">
+            <div class="bidding-history-table" data-bidding-history>
+              <table class="bid-table">
+                <thead>
+                  <tr class="bid-table-header" data-bid-header></tr>
+                </thead>
+                <tbody class="bid-table-body" data-bid-body></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="bidding-right">
+            <div class="bid-grid" data-bid-grid></div>
+            <div class="call-row" data-call-row></div>
+          </div>
+        `;
+
+        gameArea.innerHTML = '';
+        gameArea.appendChild(biddingTemplate);
+
+        const historyEl = gameArea.querySelector('[data-bidding-history]');
+        const bidGrid = gameArea.querySelector('[data-bid-grid]');
+        const callRow = gameArea.querySelector('[data-call-row]');
+
+        const suitSymbols = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' };
+
+        const getSeatName = (seat) => currentTable.players[seat] || seat;
+        const nextSeat = (seat) => seatOrder[(seatOrder.indexOf(seat) + 1) % seatOrder.length];
+
+        function formatCall(call) {
+          if (call === 'pass') return ctx.t('pass');
+          if (call === 'double') return ctx.t('double');
+          if (call === 'redouble') return ctx.t('redouble');
+          const { level, strain } = parseBid(call);
+          const symbol = suitSymbols[strain] || strain;
+          if (strain === 'NT') {
+            return `<span class="bid-level">${level}</span><span class="bid-suit nt">${symbol}</span>`;
+          }
+          return `<span class="bid-level">${level}</span><span class="bid-suit">${symbol}</span>`;
+        }
+
+        function callCssClass(call) {
+          if (call === 'pass') return 'call-pass';
+          if (call === 'double') return 'call-double';
+          if (call === 'redouble') return 'call-redouble';
+          const { strain } = parseBid(call);
+          return `call-suit-${strain.toLowerCase()}`;
+        }
+
+        const classifyCall = (call) => {
+          if (call === 'pass') return 'pass';
+          if (call === 'double') return 'double';
+          if (call === 'redouble') return 'redouble';
+          return 'bid';
+        };
+
+        const lastNonPass = () => {
+          for (let i = biddingState.bids.length - 1; i >= 0; i--) {
+            if (biddingState.bids[i].type !== 'pass') return biddingState.bids[i];
+          }
+          return null;
+        };
+
+        const lastCall = () => biddingState.bids[biddingState.bids.length - 1] || null;
+
+        const canDouble = () => {
+          const recent = lastNonPass();
+          const recentCall = lastCall();
+          if (!recent || recent.type !== 'bid') return false;
+          if (recentCall && (recentCall.type === 'double' || recentCall.type === 'redouble')) return false;
+          return !sameTeam(biddingState.currentSeat, recent.seat);
+        };
+
+        const canRedouble = () => {
+          const recentCall = lastCall();
+          if (!recentCall || recentCall.type !== 'double') return false;
+          return !sameTeam(biddingState.currentSeat, recentCall.seat);
+        };
+
+        const lastBid = () => {
+          for (let i = biddingState.bids.length - 1; i >= 0; i--) {
+            if (biddingState.bids[i].type === 'bid') return biddingState.bids[i];
+          }
+          return null;
+        };
+
+        const renderHistory = () => {
+          if (!historyEl) return;
+          const headerRow = historyEl.querySelector('[data-bid-header]');
+          const bodyEl = historyEl.querySelector('[data-bid-body]');
+          const escapeAttr = (value) => String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+          const dealerIdx = seatOrder.indexOf(biddingState.dealer);
+          const columnOrder = [];
+          for (let i = 0; i < 4; i++) {
+            columnOrder.push(seatOrder[(dealerIdx + i) % 4]);
+          }
+
+          headerRow.innerHTML = columnOrder
+            .map((seat) => {
+              const name = getSeatName(seat);
+              const safeName = escapeAttr(name);
+              return `<th title="${safeName}">${safeName}</th>`;
+            })
+            .join('');
+
+          const bidsBySeat = { north: [], east: [], south: [], west: [] };
+          biddingState.bids.forEach(bid => {
+            bidsBySeat[bid.seat].push(bid.call);
+          });
+
+          const maxRows = Math.max(...columnOrder.map(seat => bidsBySeat[seat].length), 1);
+
+          const rows = [];
+          for (let rowIdx = 0; rowIdx < maxRows; rowIdx++) {
+            const cells = columnOrder.map(seat => {
+              const call = bidsBySeat[seat][rowIdx];
+              if (!call) return '<td></td>';
+              const formatted = formatCall(call);
+              const cssClass = callCssClass(call);
+              return `<td><span class="bid-call ${cssClass}">${formatted}</span></td>`;
+            });
+            rows.push(`<tr>${cells.join('')}</tr>`);
+          }
+
+          bodyEl.innerHTML = rows.join('');
+        };
+
+        const updateButtons = () => {
+          const highestBid = lastBid();
+          const bidButtons = bidGrid.querySelectorAll('[data-call]');
+          bidButtons.forEach((btn) => {
+            const call = btn.getAttribute('data-call');
+            const allowed = !biddingState.ended && isHigherBid(call, highestBid?.call);
+            btn.disabled = !allowed;
+          });
+
+          const passBtn = callRow.querySelector('[data-call="pass"]');
+          const doubleBtn = callRow.querySelector('[data-call="double"]');
+          const redoubleBtn = callRow.querySelector('[data-call="redouble"]');
+
+          if (passBtn) passBtn.disabled = biddingState.ended;
+          if (doubleBtn) doubleBtn.disabled = biddingState.ended || !canDouble();
+          if (redoubleBtn) redoubleBtn.disabled = biddingState.ended || !canRedouble();
+        };
+
+        const commitState = () => {
+          currentDeal.bidding = { ...biddingState };
+          currentDeal.bidHistory = [...biddingState.bids];
+        };
+
+        const handleCall = (call) => {
+          if (biddingState.ended) return;
+          const type = classifyCall(call);
+
+          if (type === 'bid' && !isHigherBid(call, lastBid()?.call)) return;
+          if (type === 'double' && !canDouble()) return;
+          if (type === 'redouble' && !canRedouble()) return;
+
+          biddingState.bids.push({
+            seat: biddingState.currentSeat,
+            call,
+            type
+          });
+
+          biddingState.passCount = type === 'pass' ? biddingState.passCount + 1 : 0;
+          biddingState.ended = biddingState.passCount >= 3 && biddingState.bids.some((b) => b.type === 'bid');
+          biddingState.currentSeat = nextSeat(biddingState.currentSeat);
+
+          commitState();
+          persistBiddingState(currentTable.id, biddingState);
+          renderHistory();
+          updateButtons();
+
+          // Check if bidding ended and update status
+          if (biddingState.ended) {
+            const statusEl = host.querySelector('[data-status-text]');
+            const hourglassIcon = host.querySelector('[data-hourglass-icon]');
+            if (statusEl) statusEl.textContent = 'Waiting to play...';
+            if (hourglassIcon) {
+              hourglassIcon.classList.remove('hourglass-spinning');
+            }
+          }
+        };
+
+        // Build bid buttons 1C-7NT
+        for (let level = 1; level <= 7; level++) {
+          suitOrder.forEach((strain) => {
+            const call = `${level}${strain}`;
+            const btn = document.createElement('button');
+            btn.className = `btn bid-button ${callCssClass(call)}`;
+            btn.innerHTML = formatCall(call);
+            btn.setAttribute('data-call', call);
+            btn.addEventListener('click', () => handleCall(call));
+            bidGrid.appendChild(btn);
+          });
+        }
+
+        // Pass, Double, Redouble row
+        const calls = [
+          { key: 'pass', label: ctx.t('pass') },
+          { key: 'double', label: ctx.t('double') },
+          { key: 'redouble', label: ctx.t('redouble') }
+        ];
+
+        calls.forEach(({ key, label }) => {
+          const btn = document.createElement('button');
+          btn.className = `btn call-button ${callCssClass(key)}`;
+          btn.textContent = label;
+          btn.setAttribute('data-call', key);
+          btn.addEventListener('click', () => {
+            handleCall(key);
+            // Check if bidding has ended and update UI
+            if (biddingState.ended) {
+              const statusEl = host.querySelector('[data-status-text]');
+              const hourglassIcon = host.querySelector('[data-hourglass-icon]');
+              if (statusEl) statusEl.textContent = 'Waiting to play...';
+              if (hourglassIcon) {
+                hourglassIcon.classList.remove('hourglass-spinning');
+              }
+            }
+          });
+          callRow.appendChild(btn);
+        });
+
+        renderHistory();
+        updateButtons();
+      }
+    };
 
     const syncReadyUI = () => {
       syncReadyState(currentTable.id, playerReadyState);
@@ -288,11 +617,20 @@ export const tablePage = {
       if (event.key === `tableReadyState:${currentTable.id}`) {
         syncReadyUI();
       }
+      if (event.key === `tableDealState:${currentTable.id}` || event.key === `tableBiddingState:${currentTable.id}`) {
+        renderDealAndBidding();
+      }
     };
     window.addEventListener('storage', storageHandler);
 
     // Fallback polling to keep state fresh if storage events are missed
-    const readySyncInterval = setInterval(syncReadyUI, 2000);
+    const readySyncInterval = setInterval(() => {
+      syncReadyUI();
+      renderDealAndBidding();
+    }, 2000);
+
+    // Initial render if deal already exists
+    renderDealAndBidding();
 
     // Back button
     const backBtn = host.querySelector('[data-action="back-lobby"]');
@@ -354,6 +692,14 @@ export const tablePage = {
         hcpScores.south = computeHCP(currentDeal.hands.south);
         hcpScores.west  = computeHCP(currentDeal.hands.west);
         dealNumber++;
+        
+        // Persist deal state for other tabs to sync
+        persistDealState(currentTable.id, {
+          dealNumber: currentDeal.dealNumber,
+          hands: currentDeal.hands,
+          isEvenDeal: currentDeal.isEvenDeal,
+          hcpScores
+        });
         
         // Update status to bidding and start hourglass animation
         const statusEl = host.querySelector('[data-status-text]');
@@ -617,6 +963,7 @@ export const tablePage = {
           biddingState.currentSeat = nextSeat(biddingState.currentSeat);
 
           commitState();
+          persistBiddingState(currentTable.id, biddingState);
           renderHistory();
           updateButtons();
         };
