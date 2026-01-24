@@ -69,6 +69,10 @@ export const tablePage = {
       backBtn.addEventListener('click', () => ctx.navigate('/lobby'));
     }
 
+    // Chat toggle button in header
+    const chatToggleHeaderBtn = host.querySelector('[data-action="toggle-chat"]');
+    let chatToggleClick = null; // Will be set after chat drawer is created
+
     // Observers indicator in header
     const observersIndicator = host.querySelector('[data-observers-indicator]');
     if (observersIndicator) {
@@ -172,17 +176,16 @@ export const tablePage = {
       observersSection.style.display = 'none';
     }
 
-    // Chat drawer
+    // Chat drawer - offcanvas panel (v2)
+    const chatContainer = host.querySelector('[data-chat-container]');
+    
     const chatDrawer = document.createElement('div');
-    chatDrawer.className = 'chat-drawer open';
+    chatDrawer.className = 'chat-drawer';
     chatDrawer.innerHTML = `
       <div class="chat-drawer-header" data-chat-header>
-        <button class="chat-toggle" data-chat-toggle>
-          <i class="bi bi-chat-dots"></i>
-        </button>
         <div class="chat-tabs">
-          <button class="chat-tab active" data-chat-tab="table"><span data-i18n="chatTable"></span></button>
-          <button class="chat-tab" data-chat-tab="lobby"><span data-i18n="chatLobby"></span></button>
+          <button class="chat-tab active" data-chat-tab="table" style="background: rgba(31, 156, 117, 0.8); color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 600;"><span data-i18n="chatTable"></span></button>
+          <button class="chat-tab" data-chat-tab="lobby" style="background: rgba(31, 156, 117, 0.5); color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 600;"><span data-i18n="chatLobby"></span></button>
         </div>
       </div>
       <div class="chat-drawer-body" data-chat-body-wrapper>
@@ -194,15 +197,24 @@ export const tablePage = {
       </div>
     `;
 
+    if (chatContainer) {
+      chatContainer.appendChild(chatDrawer);
+    } else {
+      host.append(chatContainer);
+      chatContainer.appendChild(chatDrawer);
+    }
+
     let activeTab = 'table';
-    let isOpen = true;
+    let isOpen = false;  // Start hidden
 
     const chatBody = chatDrawer.querySelector('[data-chat-body]');
     const chatInput = chatDrawer.querySelector('[data-chat-input]');
     const chatSend = chatDrawer.querySelector('[data-chat-send]');
     const chatHeader = chatDrawer.querySelector('[data-chat-header]');
-    const toggleBtn = chatDrawer.querySelector('[data-chat-toggle]');
     const tabButtons = chatDrawer.querySelectorAll('[data-chat-tab]');
+
+    // Initialize chat as hidden
+    chatContainer.classList.remove('open');
 
     function trimMessages(list) {
       while (list.length > MAX_CHAT_MESSAGES) list.shift();
@@ -234,14 +246,16 @@ export const tablePage = {
       });
     });
 
-    toggleBtn.addEventListener('click', () => {
-      isOpen = !isOpen;
-      chatDrawer.classList.toggle('open', isOpen);
-      if (isOpen) {
-        chatHeader.classList.remove('blink');
-        renderChat();
-      }
-    });
+    // Connect header toggle button
+    if (chatToggleHeaderBtn) {
+      chatToggleHeaderBtn.addEventListener('click', () => {
+        isOpen = !isOpen;
+        chatContainer.classList.toggle('open', isOpen);
+        if (isOpen) {
+          renderChat();
+        }
+      });
+    }
 
     chatSend.addEventListener('click', () => {
       const value = chatInput.value.trim().slice(0, 50);
@@ -259,7 +273,6 @@ export const tablePage = {
 
     renderChat();
     applyTranslations(chatDrawer, ctx.language);
-    host.append(chatDrawer);
 
     container.append(host);
   }
