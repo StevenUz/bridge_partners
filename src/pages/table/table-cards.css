@@ -145,6 +145,11 @@
   position: relative;
 }
 
+.grid-center {
+  align-items: flex-start;
+  padding-top: 0.25rem;
+}
+
 .grid-cell.grid-chat {
   overflow: visible;
   background: transparent;
@@ -187,6 +192,239 @@
   height: 100%;
   color: white;
   text-align: center;
+}
+
+.bidding-panel {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 0.6rem;
+  width: 100%;
+  height: 100%;
+  color: #fff;
+}
+
+.bidding-left,
+.bidding-right {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.bidding-right {
+  overflow-y: auto;
+  max-height: 100%;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+}
+
+.bidding-right::-webkit-scrollbar {
+  width: 6px;
+}
+
+.bidding-right::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+}
+
+.call-button {
+  font-weight: 600;
+}
+.bidding-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.bidding-title {
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  font-size: 1rem;
+}
+
+.bidding-status {
+  font-weight: 700;
+  padding: 0.32rem 0.5rem;
+  background: rgba(31, 156, 117, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.bidding-dealer {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.bidding-history {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 0.4rem;
+  min-height: 120px;
+  max-height: 100%;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.bid-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.28rem 0.4rem;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+  font-weight: 600;
+}
+
+.bid-row:last-child {
+  border-bottom: none;
+}
+
+.bid-seat {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.bid-call {
+  padding: 0.18rem 0.4rem;
+  border-radius: 5px;
+  min-width: 56px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+.call-pass {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e0e0e0;
+}
+
+.call-double {
+  background: rgba(220, 53, 69, 0.18);
+  color: #ffc2c7;
+}
+
+.call-redouble {
+  background: rgba(116, 74, 182, 0.18);
+  color: #e2d3ff;
+}
+
+.call-suit-c {
+  background: rgba(46, 204, 113, 0.35);
+  color: #0b1d2b;
+}
+
+.call-suit-d {
+  background: rgba(241, 196, 15, 0.35);
+  color: #b3261e;
+}
+
+.call-suit-h {
+  background: rgba(231, 76, 60, 0.35);
+  color: #b3261e;
+}
+
+.call-suit-s {
+  background: rgba(52, 152, 219, 0.35);
+  color: #0b1d2b;
+}
+
+.call-suit-nt {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+.bid-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.02rem;
+  grid-auto-rows: minmax(19px, auto);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.bid-button {
+  width: 100%;
+  font-weight: 600;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.02rem 0.08rem;
+  line-height: 1;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.08em;
+}
+
+/* Suit-specific foreground colors for bid buttons */
+.bid-button.call-suit-c,
+.bid-button.call-suit-s {
+  color: #0b1d2b; /* black suits */
+}
+
+.bid-button.call-suit-d,
+.bid-button.call-suit-h {
+  color: #b3261e; /* red suits */
+}
+
+.bid-button.call-suit-nt {
+  color: #ffffff; /* NT stays white */
+}
+
+/* Override: level digits always white */
+.bid-button .bid-level {
+  color: #ffffff !important;
+}
+
+/* Bigger suit glyph than level digit */
+.bid-button .bid-level,
+.bid-call .bid-level {
+  font-size: 0.75rem;
+  transform: scaleX(1.3);
+}
+
+.bid-button .bid-suit,
+.bid-call .bid-suit {
+  display: inline-block;
+  font-size: 0.88rem;
+  line-height: 1;
+  transform: translateY(-0.5px) scaleX(1.3);
+  margin-left: 0.48em;
+}
+
+.bid-button .bid-suit.nt,
+.bid-call .bid-suit.nt {
+  font-size: 0.7rem;
+  transform: scaleX(1.3);
+  margin-left: 0.48em;
+}
+
+.call-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.02rem;
+}
+
+.call-button {
+  font-weight: 500;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.04rem 0.08rem;
+  font-size: 0.72rem;
+  line-height: 1;
+  border-radius: 3px;
+}
+
+.bid-button:disabled,
+.call-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .deal-info {
@@ -292,6 +530,11 @@
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
 }
 
+.hand-west .playing-card:hover,
+.hand-east .playing-card:hover {
+  transform: translateX(-5px);
+}
+
 .card-inner {
   width: 100%;
   height: 100%;
@@ -303,13 +546,16 @@
   position: relative;
   overflow: hidden;
 }
+.bid-call {
+  font-weight: 600;
+}
 
 .card-face {
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
-  justify-content: center;
+  font-weight: 600;
   background: #ffffff;
   border: 1px solid #d6d6d6;
   border-radius: 6px;

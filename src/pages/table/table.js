@@ -4,6 +4,32 @@ import { applyTranslations, languages } from '../../i18n/i18n.js';
 import { dealCards } from './card-dealer.js';
 import { createCardElement } from './card-renderer.js';
 
+const seatOrder = ['south', 'west', 'north', 'east'];
+const suitOrder = ['C', 'D', 'H', 'S', 'NT'];
+
+function sameTeam(a, b) {
+  const ns = ['north', 'south'];
+  const ew = ['east', 'west'];
+  return (ns.includes(a) && ns.includes(b)) || (ew.includes(a) && ew.includes(b));
+}
+
+function parseBid(call) {
+  return {
+    level: Number(call[0]),
+    strain: call.slice(1)
+  };
+}
+
+function bidRank(call) {
+  const { level, strain } = parseBid(call);
+  return level * 10 + suitOrder.indexOf(strain);
+}
+
+function isHigherBid(candidate, lastBid) {
+  if (!lastBid) return true;
+  return bidRank(candidate) > bidRank(lastBid);
+}
+
 // Sample table data
 const currentTable = {
   id: 1,
@@ -33,6 +59,7 @@ const MAX_CHAT_MESSAGES = 15;
 let currentDeal = null;
 let dealNumber = 1;
 let hcpScores = { north: 0, east: 0, south: 0, west: 0 };
+let biddingState = null;
 
 function computeHCP(hand) {
   const values = { A: 4, K: 3, Q: 2, J: 1 };
@@ -66,6 +93,38 @@ export const tablePage = {
 
     const viewPosition = getPlayerPosition();
     const isObserver = true; // TEMP: show all hands as observer for tuning
+
+    const seatLabels = {
+      south: ctx.t('seatSouth'),
+      west: ctx.t('seatWest'),
+      north: ctx.t('seatNorth'),
+      east: ctx.t('seatEast')
+    };
+
+    const suitSymbols = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' };
+
+    const getSeatName = (seat) => currentTable.players[seat] || seat;
+    const nextSeat = (seat) => seatOrder[(seatOrder.indexOf(seat) + 1) % seatOrder.length];
+
+    function formatCall(call) {
+      if (call === 'pass') return ctx.t('pass');
+      if (call === 'double') return ctx.t('double');
+      if (call === 'redouble') return ctx.t('redouble');
+      const { level, strain } = parseBid(call);
+      const symbol = suitSymbols[strain] || strain;
+      if (strain === 'NT') {
+        return `<span class="bid-level">${level}</span><span class="bid-suit nt">${symbol}</span>`;
+      }
+      return `<span class="bid-level">${level}</span><span class="bid-suit">${symbol}</span>`;
+    }
+
+    function callCssClass(call) {
+      if (call === 'pass') return 'call-pass';
+      if (call === 'double') return 'call-double';
+      if (call === 'redouble') return 'call-redouble';
+      const { strain } = parseBid(call);
+      return `call-suit-${strain.toLowerCase()}`;
+    }
 
     applyTranslations(host, ctx.language);
 
@@ -200,15 +259,182 @@ export const tablePage = {
         eastContainer.appendChild(eastHand);
         applyTranslations(eastContainer, ctx.language);
 
-        // Hide deal button, show game info
+        // Hide deal button, show bidding panel
         dealBtn.style.display = 'none';
-        gameArea.innerHTML = `
-          <div class="deal-info">
-            <p><span data-i18n="dealCards"></span> #${dealNumber - 1}</p>
-            <p>${isRedBack ? 'Red back' : 'Blue back'}</p>
+
+        const dealerSeat = seatOrder[(currentDeal.dealNumber - 1) % seatOrder.length];
+
+        biddingState = {
+          dealer: dealerSeat,
+          currentSeat: dealerSeat,
+          bids: [],
+          passCount: 0,
+          ended: false
+        };
+
+        const biddingTemplate = document.createElement('div');
+        biddingTemplate.className = 'bidding-panel';
+        biddingTemplate.innerHTML = `
+          <div class="bidding-left">
+            <div class="bidding-header">
+              <div class="bidding-title">${ctx.t('biddingTitle')}</div>
+            </div>
+            <div class="bidding-status" data-bidding-status></div>
+            <div class="bidding-dealer">${ctx.t('dealer')}: ${getSeatName(dealerSeat)}</div>
+            <div class="bidding-history" data-bidding-history></div>
+          </div>
+          <div class="bidding-right">
+            <div class="bid-grid" data-bid-grid></div>
+            <div class="call-row" data-call-row></div>
           </div>
         `;
+
+        gameArea.innerHTML = '';
+        gameArea.appendChild(biddingTemplate);
         applyTranslations(gameArea, ctx.language);
+
+        const statusEl = gameArea.querySelector('[data-bidding-status]');
+        const historyEl = gameArea.querySelector('[data-bidding-history]');
+        const bidGrid = gameArea.querySelector('[data-bid-grid]');
+        const callRow = gameArea.querySelector('[data-call-row]');
+
+        const classifyCall = (call) => {
+          if (call === 'pass') return 'pass';
+          if (call === 'double') return 'double';
+          if (call === 'redouble') return 'redouble';
+          return 'bid';
+        };
+
+        const lastNonPass = () => {
+          for (let i = biddingState.bids.length - 1; i >= 0; i--) {
+            if (biddingState.bids[i].type !== 'pass') return biddingState.bids[i];
+          }
+          return null;
+        };
+
+        const lastBid = () => {
+          for (let i = biddingState.bids.length - 1; i >= 0; i--) {
+            if (biddingState.bids[i].type === 'bid') return biddingState.bids[i];
+          }
+          return null;
+        };
+
+        const lastCall = () => biddingState.bids[biddingState.bids.length - 1] || null;
+
+        const canDouble = () => {
+          const recent = lastNonPass();
+          const recentCall = lastCall();
+          if (!recent || recent.type !== 'bid') return false;
+          if (recentCall && (recentCall.type === 'double' || recentCall.type === 'redouble')) return false;
+          return !sameTeam(biddingState.currentSeat, recent.seat);
+        };
+
+        const canRedouble = () => {
+          const recentCall = lastCall();
+          if (!recentCall || recentCall.type !== 'double') return false;
+          return !sameTeam(biddingState.currentSeat, recentCall.seat);
+        };
+
+        const renderHistory = () => {
+          if (!historyEl) return;
+          historyEl.innerHTML = biddingState.bids
+            .map((bid) => {
+              const callLabel = formatCall(bid.call);
+              return `<div class="bid-row"><span class="bid-seat">${getSeatName(bid.seat)}</span><span class="bid-call ${callCssClass(bid.call)}">${callLabel}</span></div>`;
+            })
+            .join('');
+        };
+
+        const updateButtons = () => {
+          const highestBid = lastBid();
+          const bidButtons = bidGrid.querySelectorAll('[data-call]');
+          bidButtons.forEach((btn) => {
+            const call = btn.getAttribute('data-call');
+            const allowed = !biddingState.ended && isHigherBid(call, highestBid?.call);
+            btn.disabled = !allowed;
+          });
+
+          const passBtn = callRow.querySelector('[data-call="pass"]');
+          const doubleBtn = callRow.querySelector('[data-call="double"]');
+          const redoubleBtn = callRow.querySelector('[data-call="redouble"]');
+
+          if (passBtn) passBtn.disabled = biddingState.ended;
+          if (doubleBtn) doubleBtn.disabled = biddingState.ended || !canDouble();
+          if (redoubleBtn) redoubleBtn.disabled = biddingState.ended || !canRedouble();
+        };
+
+        const updateStatus = () => {
+          if (!statusEl) return;
+          const contract = lastBid();
+          if (biddingState.ended) {
+            const contractText = contract ? formatCall(contract.call) : ctx.t('pass');
+            statusEl.textContent = `${ctx.t('biddingEnded')}: ${contractText}`;
+          } else {
+            statusEl.textContent = `${ctx.t('biddingTurn')}: ${getSeatName(biddingState.currentSeat)} (${seatLabels[biddingState.currentSeat]})`;
+          }
+        };
+
+        const commitState = () => {
+          currentDeal.bidding = { ...biddingState };
+          currentDeal.bidHistory = [...biddingState.bids];
+        };
+
+        const handleCall = (call) => {
+          if (biddingState.ended) return;
+          const type = classifyCall(call);
+
+          if (type === 'bid' && !isHigherBid(call, lastBid()?.call)) return;
+          if (type === 'double' && !canDouble()) return;
+          if (type === 'redouble' && !canRedouble()) return;
+
+          biddingState.bids.push({
+            seat: biddingState.currentSeat,
+            call,
+            type
+          });
+
+          biddingState.passCount = type === 'pass' ? biddingState.passCount + 1 : 0;
+          biddingState.ended = biddingState.passCount >= 3 && biddingState.bids.some((b) => b.type === 'bid');
+          biddingState.currentSeat = nextSeat(biddingState.currentSeat);
+
+          commitState();
+          renderHistory();
+          updateButtons();
+          updateStatus();
+        };
+
+        // Build bid buttons 1C-7NT
+        for (let level = 1; level <= 7; level++) {
+          suitOrder.forEach((strain) => {
+            const call = `${level}${strain}`;
+            const btn = document.createElement('button');
+            btn.className = `btn bid-button ${callCssClass(call)}`;
+            btn.innerHTML = formatCall(call);
+            btn.setAttribute('data-call', call);
+            btn.addEventListener('click', () => handleCall(call));
+            bidGrid.appendChild(btn);
+          });
+        }
+
+        // Pass, Double, Redouble row
+        const calls = [
+          { key: 'pass', label: ctx.t('pass') },
+          { key: 'double', label: ctx.t('double') },
+          { key: 'redouble', label: ctx.t('redouble') }
+        ];
+
+        calls.forEach(({ key, label }) => {
+          const btn = document.createElement('button');
+          btn.className = `btn call-button ${callCssClass(key)}`;
+          btn.textContent = label;
+          btn.setAttribute('data-call', key);
+          btn.addEventListener('click', () => handleCall(key));
+          callRow.appendChild(btn);
+        });
+
+        renderHistory();
+        updateButtons();
+        updateStatus();
       });
     }
 
