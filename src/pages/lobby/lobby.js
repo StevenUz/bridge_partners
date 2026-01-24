@@ -149,10 +149,10 @@ export const lobbyPage = {
       applyTranslations(col, ctx.language);
 
       const joinBtn = col.querySelector('[data-action="join"]');
-joinBtn.addEventListener('click', () => {
-          // Navigate to table view with tableId and position parameters
-          ctx.navigate(`/table?id=${tableId}&position=south`);
-        });
+      joinBtn.addEventListener('click', () => {
+        // Navigate to table view with tableId and position parameters
+        ctx.navigate(`/table?id=${table.id}&position=south`);
+      });
 
       grid.append(col);
     });
