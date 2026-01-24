@@ -12,6 +12,14 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
   const languagePicker = nav.querySelector('[data-language-picker]');
   const brand = nav.querySelector('[data-brand]');
 
+  // Extract table id from current URL if on table or observer page
+  const getTableId = () => {
+    const params = new URLSearchParams(window.location.search);
+    const idStr = params.get('id');
+    const id = Number(idStr);
+    return Number.isFinite(id) && id > 0 ? id : 1; // Default to 1
+  };
+
   Object.entries(languages).forEach(([value, label]) => {
     const option = document.createElement('option');
     option.value = value;
@@ -29,7 +37,14 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
   });
 
   nav.querySelectorAll('[data-route]').forEach((link) => {
-    const href = link.getAttribute('data-route');
+    let href = link.getAttribute('data-route');
+    
+    // If Observer link, append current table id
+    if (href === '/observer') {
+      const tableId = getTableId();
+      href = `/observer?id=${tableId}`;
+    }
+    
     if (href === currentPath) {
       link.classList.add('active');
     }

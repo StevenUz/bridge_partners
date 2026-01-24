@@ -2,12 +2,14 @@ import { homePage } from './pages/home/home.js';
 import { lobbyPage } from './pages/lobby/lobby.js';
 import { tablePage } from './pages/table/table.js';
 import { statisticsPage } from './pages/statistics/statistics.js';
+import { observerPage } from './pages/observer/observer.js';
 
 export const routes = [
   homePage,
   lobbyPage,
   tablePage,
-  statisticsPage
+  statisticsPage,
+  observerPage
 ];
 
 export function matchRoute(path) {

@@ -134,9 +134,14 @@ export const lobbyPage = {
               <span class="player-name">${south.playerName}</span>
             </div>
           </div>
-          <button class="btn btn-primary w-100" data-action="join" data-id="${table.id}">
-            <i class="bi bi-box-arrow-in-right me-2"></i>${ctx.t('tableJoin')}
-          </button>
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary flex-grow-1" data-action="join" data-id="${table.id}">
+              <i class="bi bi-box-arrow-in-right me-2"></i>${ctx.t('tableJoin')}
+            </button>
+            <button class="btn btn-outline-secondary" data-action="observe" data-id="${table.id}" title="${ctx.t('tableObservers')}">
+              <i class="bi bi-eye"></i> ${ctx.t('observe')}
+            </button>
+          </div>
           <div class="d-flex justify-content-between align-items-center text-muted small mt-2">
             <span><i class="bi bi-person-fill me-1"></i>${ctx.t('tablePlayers')}: ${players}/4</span>
             <span class="observer-indicator ${hasObservers ? 'has-observers' : ''}" ${observerTooltip}>
@@ -149,9 +154,13 @@ export const lobbyPage = {
       applyTranslations(col, ctx.language);
 
       const joinBtn = col.querySelector('[data-action="join"]');
+      const observeBtn = col.querySelector('[data-action="observe"]');
       joinBtn.addEventListener('click', () => {
         // Navigate to table view with tableId and position parameters
         ctx.navigate(`/table?id=${table.id}&position=south`);
+      });
+      observeBtn.addEventListener('click', () => {
+        ctx.navigate(`/observer?id=${table.id}`);
       });
 
       grid.append(col);

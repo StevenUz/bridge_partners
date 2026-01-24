@@ -251,6 +251,19 @@ export const tablePage = {
       const storedBidding = loadBiddingState(currentTable.id);
       if (!storedDeal) return; // No deal yet
 
+      // Disable deal during an active deal/bidding round
+      const dealBtn = host.querySelector('[data-action="deal-cards"]');
+      if (dealBtn) {
+        dealBtn.disabled = true;
+        dealBtn.classList.remove('dealer-ready');
+      }
+
+      // Ensure status shows bidding phase
+      const statusEl = host.querySelector('[data-status-text]');
+      const hourglassIcon = host.querySelector('[data-hourglass-icon]');
+      if (statusEl) statusEl.textContent = 'Waiting for bidding...';
+      if (hourglassIcon) hourglassIcon.classList.add('hourglass-spinning');
+
       // Hide ready panels
       ['north', 'south', 'west', 'east'].forEach(position => {
         const panel = host.querySelector(`[data-player-position="${position}"]`);
@@ -271,21 +284,27 @@ export const tablePage = {
         const container = host.querySelector(`[data-cards-${slotName}]`);
         if (!container) return;
         container.innerHTML = '';
-        const hcpLabel = document.createElement('div');
-        hcpLabel.className = `hcp-label hcp-${slotName}`;
-        hcpLabel.innerHTML = `${currentTable.players[seatName]}: ${hcpScores[seatName]}`;
-        container.appendChild(hcpLabel);
         
-        // Only render actual cards if this is the viewer's own seat
+        // Always show player name and position
+        const nameLabel = document.createElement('div');
+        nameLabel.className = `hcp-label hcp-${slotName}`;
+        
+        // Show position and name for all; add HCP for viewer's own seat
         if (viewerSeat === seatName) {
-          const hand = createCardDisplay(
-            currentDeal.hands[seatName],
-            slotName,
-            true, // Always show viewer's own cards face-up
-            isRedBack
-          );
-          container.appendChild(hand);
+          nameLabel.innerHTML = `${positionLabels[seatName]} – ${currentTable.players[seatName]}: ${hcpScores[seatName]}`;
+        } else {
+          nameLabel.innerHTML = `${positionLabels[seatName]} – ${currentTable.players[seatName]}`;
         }
+        container.appendChild(nameLabel);
+        
+        // Render cards: face-up for viewer, face-down (backs) for others
+        const hand = createCardDisplay(
+          currentDeal.hands[seatName],
+          slotName,
+          viewerSeat === seatName, // Show face-up only for viewer's seat
+          isRedBack
+        );
+        container.appendChild(hand);
       };
 
       renderHandForSlot('north', topSeat);
@@ -293,39 +312,41 @@ export const tablePage = {
       renderHandForSlot('west', leftSeat);
       renderHandForSlot('east', rightSeat);
 
-      // Restore bidding if available
-      if (storedBidding) {
-        biddingState = storedBidding;
-        const dealerSeat = seatOrder[(currentDeal.dealNumber - 1) % seatOrder.length];
-        if (!biddingState.dealer) biddingState.dealer = dealerSeat;
-        if (!biddingState.currentSeat) biddingState.currentSeat = dealerSeat;
+      // Always render bidding panel (create default state if missing)
+      const dealerSeat = seatOrder[(currentDeal.dealNumber - 1) % seatOrder.length];
+      biddingState = storedBidding || {
+        dealer: dealerSeat,
+        currentSeat: dealerSeat,
+        bids: [],
+        passCount: 0,
+        ended: false
+      };
 
-        // Render bidding panel (copy from deal button logic)
-        const biddingTemplate = document.createElement('div');
-        biddingTemplate.className = 'bidding-panel';
-        biddingTemplate.innerHTML = `
-          <div class="bidding-left">
-            <div class="bidding-history-table" data-bidding-history>
-              <table class="bid-table">
-                <thead>
-                  <tr class="bid-table-header" data-bid-header></tr>
-                </thead>
-                <tbody class="bid-table-body" data-bid-body></tbody>
-              </table>
-            </div>
+      const biddingTemplate = document.createElement('div');
+      biddingTemplate.className = 'bidding-panel';
+      biddingTemplate.innerHTML = `
+        <div class="bidding-left">
+          <div class="bidding-history-table" data-bidding-history>
+            <table class="bid-table">
+              <thead>
+                <tr class="bid-table-header" data-bid-header></tr>
+              </thead>
+              <tbody class="bid-table-body" data-bid-body></tbody>
+            </table>
           </div>
-          <div class="bidding-right">
-            <div class="bid-grid" data-bid-grid></div>
-            <div class="call-row" data-call-row></div>
-          </div>
-        `;
+        </div>
+        <div class="bidding-right">
+          <div class="bid-grid" data-bid-grid></div>
+          <div class="call-row" data-call-row></div>
+        </div>
+      `;
 
-        gameArea.innerHTML = '';
-        gameArea.appendChild(biddingTemplate);
+      gameArea.innerHTML = '';
+      gameArea.appendChild(biddingTemplate);
 
-        const historyEl = gameArea.querySelector('[data-bidding-history]');
-        const bidGrid = gameArea.querySelector('[data-bid-grid]');
-        const callRow = gameArea.querySelector('[data-call-row]');
+      const historyEl = gameArea.querySelector('[data-bidding-history]');
+      const bidGrid = gameArea.querySelector('[data-bid-grid]');
+      const callRow = gameArea.querySelector('[data-call-row]');
 
         const suitSymbols = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' };
 
@@ -483,6 +504,8 @@ export const tablePage = {
 
           // Check if bidding ended and update status
           if (biddingState.ended) {
+            dealBtn.disabled = false;
+            dealBtn.classList.add('dealer-ready');
             const statusEl = host.querySelector('[data-status-text]');
             const hourglassIcon = host.querySelector('[data-hourglass-icon]');
             if (statusEl) statusEl.textContent = 'Waiting to play...';
@@ -534,7 +557,6 @@ export const tablePage = {
 
         renderHistory();
         updateButtons();
-      }
     };
 
     const syncReadyUI = () => {
@@ -793,8 +815,9 @@ export const tablePage = {
         eastContainer.appendChild(eastHand);
         applyTranslations(eastContainer, ctx.language);
 
-        // Hide deal button, show bidding panel
-        dealBtn.style.display = 'none';
+        // Disable deal button during bidding, but keep it visible
+        dealBtn.disabled = true;
+        dealBtn.classList.remove('dealer-ready');
 
         const dealerSeat = seatOrder[(currentDeal.dealNumber - 1) % seatOrder.length];
 
@@ -805,6 +828,9 @@ export const tablePage = {
           passCount: 0,
           ended: false
         };
+
+        // Persist initial bidding state so other tabs/observer can render immediately
+        persistBiddingState(currentTable.id, biddingState);
 
         const biddingTemplate = document.createElement('div');
         biddingTemplate.className = 'bidding-panel';
@@ -1020,6 +1046,9 @@ export const tablePage = {
             if (hourglassIcon) {
               hourglassIcon.classList.remove('hourglass-spinning');
             }
+            // Re-enable Deal Cards button for next round
+            dealBtn.disabled = false;
+            dealBtn.classList.add('dealer-ready');
           }
         };
       });
