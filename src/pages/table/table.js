@@ -128,6 +128,12 @@ export const tablePage = {
 
     applyTranslations(host, ctx.language);
 
+    // Start hourglass spinning animation immediately (waiting for players to be ready)
+    const hourglassIcon = host.querySelector('[data-hourglass-icon]');
+    if (hourglassIcon) {
+      hourglassIcon.classList.add('hourglass-spinning');
+    }
+
     // Back button
     const backBtn = host.querySelector('[data-action="back-lobby"]');
     if (backBtn) {
@@ -180,6 +186,14 @@ export const tablePage = {
         hcpScores.south = computeHCP(currentDeal.hands.south);
         hcpScores.west  = computeHCP(currentDeal.hands.west);
         dealNumber++;
+        
+        // Update status to bidding and start hourglass animation
+        const statusEl = host.querySelector('[data-status-text]');
+        const hourglassIcon = host.querySelector('[data-hourglass-icon]');
+        if (statusEl) statusEl.textContent = 'Waiting for bidding...';
+        if (hourglassIcon) {
+          hourglassIcon.classList.add('hourglass-spinning');
+        }
         
         // Render hands
         const isRedBack = currentDeal.isEvenDeal;
@@ -340,6 +354,11 @@ export const tablePage = {
           if (!historyEl) return;
           const headerRow = historyEl.querySelector('[data-bid-header]');
           const bodyEl = historyEl.querySelector('[data-bid-body]');
+          const escapeAttr = (value) => String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
           
           // Build column order starting from dealer
           const dealerIdx = seatOrder.indexOf(dealerSeat);
@@ -349,7 +368,13 @@ export const tablePage = {
           }
 
           // Render header
-          headerRow.innerHTML = columnOrder.map(seat => `<th>${getSeatName(seat)}</th>`).join('');
+          headerRow.innerHTML = columnOrder
+            .map((seat) => {
+              const name = getSeatName(seat);
+              const safeName = escapeAttr(name);
+              return `<th title="${safeName}">${safeName}</th>`;
+            })
+            .join('');
 
           // Group bids by seat
           const bidsBySeat = { north: [], east: [], south: [], west: [] };
@@ -447,12 +472,35 @@ export const tablePage = {
           btn.className = `btn call-button ${callCssClass(key)}`;
           btn.textContent = label;
           btn.setAttribute('data-call', key);
-          btn.addEventListener('click', () => handleCall(key));
+          btn.addEventListener('click', () => {
+            handleCall(key);
+            // Check if bidding has ended and update UI
+            if (biddingState.ended) {
+              const statusEl = host.querySelector('[data-status-text]');
+              const hourglassIcon = host.querySelector('[data-hourglass-icon]');
+              if (statusEl) statusEl.textContent = 'Waiting to play...';
+              if (hourglassIcon) {
+                hourglassIcon.classList.remove('hourglass-spinning');
+              }
+            }
+          });
           callRow.appendChild(btn);
         });
 
         renderHistory();
         updateButtons();
+        
+        // Update status when bidding ends and play phase begins
+        const checkBiddingComplete = () => {
+          if (biddingState.ended) {
+            const statusEl = host.querySelector('[data-status-text]');
+            const hourglassIcon = host.querySelector('[data-hourglass-icon]');
+            if (statusEl) statusEl.textContent = 'Waiting to play...';
+            if (hourglassIcon) {
+              hourglassIcon.classList.remove('hourglass-spinning');
+            }
+          }
+        };
       });
     }
 

@@ -32,6 +32,29 @@
   font-size: 0.9rem;
 }
 
+.table-icon {
+  height: 1.5rem;
+  width: 1.5rem;
+  display: inline-block;
+  vertical-align: middle;
+  filter: brightness(0) invert(1);
+}
+
+@keyframes rotateHourglass {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hourglass-spinning {
+  animation: rotateHourglass 24s linear infinite;
+  transform-origin: center;
+  display: inline-block;
+}
+
 .header-right {
   gap: 1rem;
 }
@@ -268,6 +291,7 @@
 .bid-table {
   width: 100%;
   border-collapse: separate;
+  table-layout: fixed;
   border-spacing: 0;
 }
 
@@ -286,6 +310,9 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
   text-align: center;
   background: rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bid-table-body td {
