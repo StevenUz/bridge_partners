@@ -317,14 +317,23 @@
 
 .card-rank {
   font-size: 15px;
+  line-height: 1;
+  display: block;
+  height: 1em;
+  font-variant-numeric: lining-nums;
+  font-feature-settings: "lnum" 1;
+  transform: translateY(-1px);
 }
 
 .card-suit {
-  font-size: 14px;
+  font-size: 24px;
+  line-height: 1;
+  display: block;
+  height: 1em;
 }
 
 .card-pip {
-  font-size: 28px;
+  font-size: 51px;
   line-height: 1;
   font-weight: 600;
 }
