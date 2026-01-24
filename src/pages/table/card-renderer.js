@@ -40,7 +40,13 @@ export function createHandDisplay(hand, position, faceVisible = true, isRedBack 
   container.className = `hand-display hand-${position}`;
 
   const cards = hand.map(card => createCardElement(card, faceVisible, isRedBack));
-  cards.forEach(card => container.appendChild(card));
+  cards.forEach((card, idx) => {
+    // For side hands, lower cards (higher idx) render on top, upper cards render behind
+    if (position === 'west' || position === 'east') {
+      card.style.zIndex = idx;
+    }
+    container.appendChild(card);
+  });
 
   return container;
 }

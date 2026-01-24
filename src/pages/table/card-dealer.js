@@ -48,20 +48,34 @@ export function dealCards(dealNumber = 1) {
     west: shuffled.slice(39, 52)
   };
 
-  // Sort each hand by suit then rank for better readability
+  const baseSuitOrder = ['♣', '♦', '♠', '♥']; // alternating colors: club, diamond, spade, heart
+
+  function suitOrderForHand(hand) {
+    const present = new Set(hand.map(c => c.suit));
+    if (present.size === 4) return baseSuitOrder;
+
+    // Three-suit cases to keep reds separated by a black (or vice-versa)
+    const has = (s) => present.has(s);
+    if (present.size === 3) {
+      if (has('♠') && has('♥') && has('♦')) return ['♥', '♠', '♦'];
+      if (has('♠') && has('♣') && has('♦')) return ['♠', '♦', '♣'];
+      if (has('♠') && has('♣') && has('♥')) return ['♠', '♥', '♣'];
+      if (has('♣') && has('♦') && has('♥')) return ['♦', '♣', '♥'];
+    }
+
+    // Fallback: keep base order but only those present
+    return baseSuitOrder.filter(s => present.has(s));
+  }
+
+  // Sort each hand by suit then rank with color-alternating suit order
   Object.keys(hands).forEach(pos => {
+    const suitOrder = suitOrderForHand(hands[pos]);
     hands[pos].sort((a, b) => {
-      const suitOrder = ['♠', '♥', '♦', '♣'];
-      const rankOrder = RANKS;
       const suitDiff = suitOrder.indexOf(a.suit) - suitOrder.indexOf(b.suit);
       if (suitDiff !== 0) return suitDiff;
-      return rankOrder.indexOf(a.rank) - rankOrder.indexOf(b.rank);
+      // Sort ranks descending within suit so strongest card ends up to the right
+      return RANKS.indexOf(b.rank) - RANKS.indexOf(a.rank);
     });
-    
-    // For vertical positions (West/East), reverse so strongest (A) is at top
-    if (pos === 'west' || pos === 'east') {
-      hands[pos].reverse();
-    }
   });
 
   return {

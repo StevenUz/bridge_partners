@@ -59,7 +59,7 @@ export const tablePage = {
     host.innerHTML = template;
 
     const viewPosition = getPlayerPosition();
-    const isObserver = viewPosition === 'observer';
+    const isObserver = true; // TEMP: show all hands as observer for tuning
 
     applyTranslations(host, ctx.language);
 
