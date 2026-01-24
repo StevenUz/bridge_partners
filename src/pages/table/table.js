@@ -276,12 +276,14 @@ export const tablePage = {
         biddingTemplate.className = 'bidding-panel';
         biddingTemplate.innerHTML = `
           <div class="bidding-left">
-            <div class="bidding-header">
-              <div class="bidding-title">${ctx.t('biddingTitle')}</div>
+            <div class="bidding-history-table" data-bidding-history>
+              <table class="bid-table">
+                <thead>
+                  <tr class="bid-table-header" data-bid-header></tr>
+                </thead>
+                <tbody class="bid-table-body" data-bid-body></tbody>
+              </table>
             </div>
-            <div class="bidding-status" data-bidding-status></div>
-            <div class="bidding-dealer">${ctx.t('dealer')}: ${getSeatName(dealerSeat)}</div>
-            <div class="bidding-history" data-bidding-history></div>
           </div>
           <div class="bidding-right">
             <div class="bid-grid" data-bid-grid></div>
@@ -293,7 +295,6 @@ export const tablePage = {
         gameArea.appendChild(biddingTemplate);
         applyTranslations(gameArea, ctx.language);
 
-        const statusEl = gameArea.querySelector('[data-bidding-status]');
         const historyEl = gameArea.querySelector('[data-bidding-history]');
         const bidGrid = gameArea.querySelector('[data-bid-grid]');
         const callRow = gameArea.querySelector('[data-call-row]');
@@ -337,12 +338,42 @@ export const tablePage = {
 
         const renderHistory = () => {
           if (!historyEl) return;
-          historyEl.innerHTML = biddingState.bids
-            .map((bid) => {
-              const callLabel = formatCall(bid.call);
-              return `<div class="bid-row"><span class="bid-seat">${getSeatName(bid.seat)}</span><span class="bid-call ${callCssClass(bid.call)}">${callLabel}</span></div>`;
-            })
-            .join('');
+          const headerRow = historyEl.querySelector('[data-bid-header]');
+          const bodyEl = historyEl.querySelector('[data-bid-body]');
+          
+          // Build column order starting from dealer
+          const dealerIdx = seatOrder.indexOf(dealerSeat);
+          const columnOrder = [];
+          for (let i = 0; i < 4; i++) {
+            columnOrder.push(seatOrder[(dealerIdx + i) % 4]);
+          }
+
+          // Render header
+          headerRow.innerHTML = columnOrder.map(seat => `<th>${getSeatName(seat)}</th>`).join('');
+
+          // Group bids by seat
+          const bidsBySeat = { north: [], east: [], south: [], west: [] };
+          biddingState.bids.forEach(bid => {
+            bidsBySeat[bid.seat].push(bid.call);
+          });
+
+          // Find max rows needed
+          const maxRows = Math.max(...columnOrder.map(seat => bidsBySeat[seat].length), 1);
+
+          // Build rows
+          const rows = [];
+          for (let rowIdx = 0; rowIdx < maxRows; rowIdx++) {
+            const cells = columnOrder.map(seat => {
+              const call = bidsBySeat[seat][rowIdx];
+              if (!call) return '<td></td>';
+              const formatted = formatCall(call);
+              const cssClass = callCssClass(call);
+              return `<td><span class="bid-call ${cssClass}">${formatted}</span></td>`;
+            });
+            rows.push(`<tr>${cells.join('')}</tr>`);
+          }
+
+          bodyEl.innerHTML = rows.join('');
         };
 
         const updateButtons = () => {
@@ -361,17 +392,6 @@ export const tablePage = {
           if (passBtn) passBtn.disabled = biddingState.ended;
           if (doubleBtn) doubleBtn.disabled = biddingState.ended || !canDouble();
           if (redoubleBtn) redoubleBtn.disabled = biddingState.ended || !canRedouble();
-        };
-
-        const updateStatus = () => {
-          if (!statusEl) return;
-          const contract = lastBid();
-          if (biddingState.ended) {
-            const contractText = contract ? formatCall(contract.call) : ctx.t('pass');
-            statusEl.textContent = `${ctx.t('biddingEnded')}: ${contractText}`;
-          } else {
-            statusEl.textContent = `${ctx.t('biddingTurn')}: ${getSeatName(biddingState.currentSeat)} (${seatLabels[biddingState.currentSeat]})`;
-          }
         };
 
         const commitState = () => {
@@ -400,7 +420,6 @@ export const tablePage = {
           commitState();
           renderHistory();
           updateButtons();
-          updateStatus();
         };
 
         // Build bid buttons 1C-7NT
@@ -434,7 +453,6 @@ export const tablePage = {
 
         renderHistory();
         updateButtons();
-        updateStatus();
       });
     }
 

@@ -9,12 +9,22 @@ export function createCardElement(card, faceVisible = true, isRedBack = false) {
     container.innerHTML = `
       <div class="card-inner">
         <div class="card-face ${suitClass}">
-          <div class="card-corner top">
+          <div class="card-corner top-left">
             <div class="card-rank">${card.rank}</div>
             <div class="card-suit">${card.suit}</div>
           </div>
-          <div class="card-pip">${card.suit}</div>
-          <div class="card-corner bottom">
+          <div class="card-corner top-right">
+            <div class="card-rank">${card.rank}</div>
+            <div class="card-suit">${card.suit}</div>
+          </div>
+          <div class="card-center">
+            <div class="card-pip">${card.suit}</div>
+          </div>
+          <div class="card-corner bottom-left">
+            <div class="card-rank">${card.rank}</div>
+            <div class="card-suit">${card.suit}</div>
+          </div>
+          <div class="card-corner bottom-right">
             <div class="card-rank">${card.rank}</div>
             <div class="card-suit">${card.suit}</div>
           </div>
