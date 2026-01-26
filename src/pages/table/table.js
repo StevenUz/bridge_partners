@@ -148,6 +148,18 @@ function getPlayerPosition() {
   return params.get('position') || 'north';
 }
 
+function getCurrentPlayer() {
+  try {
+    const playerData = localStorage.getItem('currentPlayer');
+    if (playerData) {
+      return JSON.parse(playerData);
+    }
+  } catch (err) {
+    console.warn('Failed to read current player', err);
+  }
+  return null;
+}
+
 function createCardDisplay(hand, position, faceVisible, isRedBack) {
   const container = document.createElement('div');
   container.className = `hand-display hand-${position}`;
@@ -166,6 +178,20 @@ export const tablePage = {
   render(container, ctx) {
     const host = document.createElement('section');
     host.innerHTML = template;
+
+    try {
+      // Update current table with joined player info
+      const currentPlayer = getCurrentPlayer();
+      if (currentPlayer) {
+        const playerName = `Player ${currentPlayer.seat.charAt(0).toUpperCase()}`;
+        currentTable.players[currentPlayer.seat] = playerName;
+        console.log(`✓ Joined table ${currentPlayer.tableId} as ${currentPlayer.seat}: ${playerName}`);
+      } else {
+        console.log('No current player info - viewing table as observer');
+      }
+    } catch (err) {
+      console.error('Error initializing player:', err);
+    }
 
     const viewPosition = getPlayerPosition();
     const viewerSeat = viewPosition === 'observer' ? null : viewPosition;
@@ -229,6 +255,15 @@ export const tablePage = {
       east: host.querySelector('[data-player-position="east"]')
     };
 
+    // Highlight current player's seat
+    try {
+      if (currentPlayer && visualPanels[currentPlayer.seat]) {
+        visualPanels[currentPlayer.seat].classList.add('current-player');
+      }
+    } catch (err) {
+      console.warn('Could not highlight player seat:', err);
+    }
+
     const seatingOrder = ['north', 'east', 'south', 'west'];
     const viewerIdx = viewerSeat ? seatingOrder.indexOf(viewerSeat) : -1;
     const bottomSeat = viewerIdx >= 0 ? seatingOrder[viewerIdx] : 'south';
@@ -245,6 +280,9 @@ export const tablePage = {
       { slot: 'west',  seat: leftSeat },
       { slot: 'east',  seat: rightSeat }
     ];
+
+    // Define gameArea early so renderDealAndBidding can use it
+    const gameArea = host.querySelector('[data-game-area]');
 
     const renderDealAndBidding = () => {
       const storedDeal = loadDealState(currentTable.id);
@@ -289,11 +327,22 @@ export const tablePage = {
         const nameLabel = document.createElement('div');
         nameLabel.className = `hcp-label hcp-${slotName}`;
         
-        // Show position and name for all; add HCP for viewer's own seat
-        if (viewerSeat === seatName) {
-          nameLabel.innerHTML = `${positionLabels[seatName]} – ${currentTable.players[seatName]}: ${hcpScores[seatName]}`;
+        // North and South on one line; West and East on two lines with center align
+        if (['west', 'east'].includes(slotName)) {
+          // Side players: text on two lines, centered
+          nameLabel.style.textAlign = 'center';
+          if (viewerSeat === seatName) {
+            nameLabel.innerHTML = `${positionLabels[seatName]}<br>${currentTable.players[seatName]}: ${hcpScores[seatName]}`;
+          } else {
+            nameLabel.innerHTML = `${positionLabels[seatName]}<br>${currentTable.players[seatName]}`;
+          }
         } else {
-          nameLabel.innerHTML = `${positionLabels[seatName]} – ${currentTable.players[seatName]}`;
+          // North and South: text on one line
+          if (viewerSeat === seatName) {
+            nameLabel.innerHTML = `${positionLabels[seatName]} – ${currentTable.players[seatName]}: ${hcpScores[seatName]}`;
+          } else {
+            nameLabel.innerHTML = `${positionLabels[seatName]} – ${currentTable.players[seatName]}`;
+          }
         }
         container.appendChild(nameLabel);
         
@@ -458,10 +507,13 @@ export const tablePage = {
 
         const updateButtons = () => {
           const highestBid = lastBid();
+          const isMyTurn = viewerSeat === biddingState.currentSeat;
+          
           const bidButtons = bidGrid.querySelectorAll('[data-call]');
           bidButtons.forEach((btn) => {
             const call = btn.getAttribute('data-call');
-            const allowed = !biddingState.ended && isHigherBid(call, highestBid?.call);
+            // Button is enabled only if it's my turn, bidding hasn't ended, and bid is valid
+            const allowed = isMyTurn && !biddingState.ended && isHigherBid(call, highestBid?.call);
             btn.disabled = !allowed;
           });
 
@@ -469,9 +521,10 @@ export const tablePage = {
           const doubleBtn = callRow.querySelector('[data-call="double"]');
           const redoubleBtn = callRow.querySelector('[data-call="redouble"]');
 
-          if (passBtn) passBtn.disabled = biddingState.ended;
-          if (doubleBtn) doubleBtn.disabled = biddingState.ended || !canDouble();
-          if (redoubleBtn) redoubleBtn.disabled = biddingState.ended || !canRedouble();
+          // Only enable control buttons if it's my turn
+          if (passBtn) passBtn.disabled = !isMyTurn || biddingState.ended;
+          if (doubleBtn) doubleBtn.disabled = !isMyTurn || biddingState.ended || !canDouble();
+          if (redoubleBtn) redoubleBtn.disabled = !isMyTurn || biddingState.ended || !canRedouble();
         };
 
         const commitState = () => {
@@ -480,6 +533,8 @@ export const tablePage = {
         };
 
         const handleCall = (call) => {
+          // Only allow current player to make a call
+          if (viewerSeat !== biddingState.currentSeat) return;
           if (biddingState.ended) return;
           const type = classifyCall(call);
 
@@ -577,7 +632,15 @@ export const tablePage = {
       const playerName = currentTable.players[seat];
       const btn = document.createElement('button');
       btn.className = 'player-name-button';
-      btn.textContent = `${positionLabels[seat]} – ${playerName}`;
+      
+      // North and South on one line; West and East on two lines with center align
+      if (['west', 'east'].includes(slot)) {
+        btn.innerHTML = `${positionLabels[seat]}<br>${playerName}`;
+        btn.style.textAlign = 'center';
+      } else {
+        btn.innerHTML = `${positionLabels[seat]} – ${playerName}`;
+      }
+      
       btn.type = 'button';
       panel.appendChild(btn);
 
@@ -695,7 +758,6 @@ export const tablePage = {
 
     // Deal button
     const dealBtn = host.querySelector('[data-action="deal-cards"]');
-    const gameArea = host.querySelector('[data-game-area]');
 
     if (dealBtn) {
       dealBtn.addEventListener('click', () => {
@@ -949,10 +1011,13 @@ export const tablePage = {
 
         const updateButtons = () => {
           const highestBid = lastBid();
+          const isMyTurn = viewerSeat === biddingState.currentSeat;
+          
           const bidButtons = bidGrid.querySelectorAll('[data-call]');
           bidButtons.forEach((btn) => {
             const call = btn.getAttribute('data-call');
-            const allowed = !biddingState.ended && isHigherBid(call, highestBid?.call);
+            // Button is enabled only if it's my turn, bidding hasn't ended, and bid is valid
+            const allowed = isMyTurn && !biddingState.ended && isHigherBid(call, highestBid?.call);
             btn.disabled = !allowed;
           });
 
@@ -960,9 +1025,10 @@ export const tablePage = {
           const doubleBtn = callRow.querySelector('[data-call="double"]');
           const redoubleBtn = callRow.querySelector('[data-call="redouble"]');
 
-          if (passBtn) passBtn.disabled = biddingState.ended;
-          if (doubleBtn) doubleBtn.disabled = biddingState.ended || !canDouble();
-          if (redoubleBtn) redoubleBtn.disabled = biddingState.ended || !canRedouble();
+          // Only enable control buttons if it's my turn
+          if (passBtn) passBtn.disabled = !isMyTurn || biddingState.ended;
+          if (doubleBtn) doubleBtn.disabled = !isMyTurn || biddingState.ended || !canDouble();
+          if (redoubleBtn) redoubleBtn.disabled = !isMyTurn || biddingState.ended || !canRedouble();
         };
 
         const commitState = () => {
@@ -971,6 +1037,8 @@ export const tablePage = {
         };
 
         const handleCall = (call) => {
+          // Only allow current player to make a call
+          if (viewerSeat !== biddingState.currentSeat) return;
           if (biddingState.ended) return;
           const type = classifyCall(call);
 

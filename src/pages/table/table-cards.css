@@ -238,7 +238,8 @@
 .player-name-button {
   width: 100%;
   max-width: 160px;
-  padding: 0.75rem 1rem;
+  padding: 1rem 1.25rem;
+  min-height: 80px;
   background: rgba(0, 0, 0, 0.3);
   border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 10px;
@@ -248,9 +249,13 @@
   text-align: center;
   cursor: default;
   transition: all 0.3s ease;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.3;
 }
 
 .player-name-button:hover {
@@ -840,9 +845,12 @@
 }
 
 .table-observers {
-  display: none
+  display: none;
+}
+
 /* Observers section (hidden) */
-.table-observers {
+.table-observers.visible {
+  display: block;
   padding: 0.5rem 1rem;
   background: rgba(0, 0, 0, 0.2);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -924,31 +932,7 @@
     justify-content: space-between;
   }
 }
-
-/* Chat drawer */
-.chat-drawer {
-  position: static;
-  width: 100%;
-  height: 100%;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 0;
-  box-shadow: none;
-  transform: none;
-  transition: none;
-  z-index: auto;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.chat-drawer:not(.open) {
-  transform: none;
-  max-height: auto;
-  overflow: hidden;
-}
+/* Chat drawer - removed duplicate definition, using table.css instead */
 
 .chat-drawer-header {
   display: flex;
@@ -978,7 +962,7 @@
 .chat-tabs {
   display: flex;
   gap: 0.5rem;
-  margin-left: auto;
+  margin-right: auto;
 }
 
 .chat-tab {
@@ -1085,7 +1069,6 @@
 @media (max-width: 576px) {
   .chat-drawer {
     left: 1rem;
-    right: 1rem;
     width: auto;
   }
 }

@@ -151,7 +151,15 @@ export const observerPage = {
 
         const nameLabel = document.createElement('div');
         nameLabel.className = `hcp-label hcp-${slotName}`;
-        nameLabel.innerHTML = `${positionLabels[seatName]} – ${currentTable.players[seatName]}: ${hcpScores[seatName]}`;
+        
+        // North and South on one line; West and East on two lines with center align
+        if (['west', 'east'].includes(slotName)) {
+          nameLabel.style.textAlign = 'center';
+          nameLabel.innerHTML = `${positionLabels[seatName]}<br>${currentTable.players[seatName]}: ${hcpScores[seatName]}`;
+        } else {
+          nameLabel.innerHTML = `${positionLabels[seatName]} – ${currentTable.players[seatName]}: ${hcpScores[seatName]}`;
+        }
+        
         container.appendChild(nameLabel);
 
         const hand = createCardDisplay(

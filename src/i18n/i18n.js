@@ -116,7 +116,7 @@ const translations = {
     biddingHistory: 'История',
     biddingEnded: 'Залагането приключи',
     pass: 'Пас',
-    double: 'Двойно',
+    double: 'Контра',
     redouble: 'Реконтра',
     dealer: 'Раздаващ',
     hcpBottom: 'Точки (долу)',

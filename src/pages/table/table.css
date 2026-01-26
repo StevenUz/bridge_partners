@@ -225,7 +225,7 @@
 /* Chat drawer */
 .chat-drawer {
   position: fixed;
-  right: 1rem;
+  left: 1rem;
   bottom: 1rem;
   width: 360px;
   max-width: calc(100% - 2rem);
@@ -250,8 +250,8 @@
   border-bottom: 1px solid #e5e5e5;
   background: linear-gradient(135deg, var(--velvet-bright) 0%, var(--velvet-deep) 100%);
   color: #fff;
-  border-top-left-radius: 12px;
   border-top-right-radius: 12px;
+  border-top-left-radius: 12px;
 }
 
 .chat-toggle {
@@ -355,7 +355,6 @@
 @media (max-width: 576px) {
   .chat-drawer {
     left: 1rem;
-    right: 1rem;
     width: auto;
   }
 }
@@ -420,4 +419,22 @@
     opacity: 0.75;
     transform: scale(1.08);
   }
+}
+/* Current player styling */
+.player-position-panel.current-player {
+  position: relative;
+  border: 2px solid var(--velvet-bright);
+  border-radius: 8px;
+  box-shadow: 0 0 12px rgba(45, 138, 102, 0.4), inset 0 0 8px rgba(45, 138, 102, 0.2);
+  background: rgba(45, 138, 102, 0.1);
+}
+
+.player-position-panel.current-player::before {
+  content: '✓';
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  color: var(--velvet-bright);
+  font-weight: bold;
+  font-size: 1.2rem;
 }

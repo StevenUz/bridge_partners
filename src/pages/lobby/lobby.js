@@ -156,10 +156,19 @@ export const lobbyPage = {
       const joinBtn = col.querySelector('[data-action="join"]');
       const observeBtn = col.querySelector('[data-action="observe"]');
       joinBtn.addEventListener('click', () => {
+        // Store current player info when joining
+        const position = 'south';
+        localStorage.setItem('currentPlayer', JSON.stringify({
+          tableId: table.id,
+          seat: position,
+          joinedAt: new Date().toISOString()
+        }));
         // Navigate to table view with tableId and position parameters
-        ctx.navigate(`/table?id=${table.id}&position=south`);
+        ctx.navigate(`/table?id=${table.id}&position=${position}`);
       });
       observeBtn.addEventListener('click', () => {
+        // Clear player info when observing
+        localStorage.removeItem('currentPlayer');
         ctx.navigate(`/observer?id=${table.id}`);
       });
 
