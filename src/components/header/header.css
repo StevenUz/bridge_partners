@@ -109,3 +109,40 @@
   border-color: var(--velvet-bright);
   box-shadow: 0 2px 8px rgba(45, 138, 102, 0.25);
 }
+[data-action="leave-table"] img {
+  filter: brightness(0) invert(1);
+}
+
+[data-action="leave-table"],
+[data-action="toggle-chat"] {
+  position: relative;
+  overflow: visible;
+}
+
+[data-action="leave-table"]::after,
+[data-action="toggle-chat"]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(29, 96, 73, 0.95);
+  color: white;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 10000;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+[data-action="leave-table"]:hover::after,
+[data-action="toggle-chat"]:hover::after {
+  opacity: 1;
+  visibility: visible;
+}

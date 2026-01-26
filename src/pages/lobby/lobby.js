@@ -114,32 +114,29 @@ export const lobbyPage = {
             </h3>
             <span class="badge bg-secondary"><i class="bi bi-people-fill me-1"></i>${players}/4</span>
           </div>
-          <div class="bridge-table-layout mb-3">
-            <div class="seat-position north ${north.isEmpty ? 'empty' : 'occupied'}">
+          <div class="bridge-table-layout mb-3" data-seats-container="${table.id}">
+            <div class="seat-position north ${north.isEmpty ? 'empty' : 'occupied'}" data-seat="north" data-table="${table.id}" style="${north.isEmpty ? 'cursor: pointer;' : ''}">
               <span class="seat-label">${north.fullLabel}</span>
               <span class="player-name">${north.playerName}</span>
             </div>
             <div class="seat-row-middle">
-              <div class="seat-position west ${west.isEmpty ? 'empty' : 'occupied'}">
+              <div class="seat-position west ${west.isEmpty ? 'empty' : 'occupied'}" data-seat="west" data-table="${table.id}" style="${west.isEmpty ? 'cursor: pointer;' : ''}">
                 <span class="seat-label">${west.fullLabel}</span>
                 <span class="player-name">${west.playerName}</span>
               </div>
-              <div class="seat-position east ${east.isEmpty ? 'empty' : 'occupied'}">
+              <div class="seat-position east ${east.isEmpty ? 'empty' : 'occupied'}" data-seat="east" data-table="${table.id}" style="${east.isEmpty ? 'cursor: pointer;' : ''}">
                 <span class="seat-label">${east.fullLabel}</span>
                 <span class="player-name">${east.playerName}</span>
               </div>
             </div>
-            <div class="seat-position south ${south.isEmpty ? 'empty' : 'occupied'}">
+            <div class="seat-position south ${south.isEmpty ? 'empty' : 'occupied'}" data-seat="south" data-table="${table.id}" style="${south.isEmpty ? 'cursor: pointer;' : ''}">
               <span class="seat-label">${south.fullLabel}</span>
               <span class="player-name">${south.playerName}</span>
             </div>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-primary flex-grow-1" data-action="join" data-id="${table.id}">
-              <i class="bi bi-box-arrow-in-right me-2"></i>${ctx.t('tableJoin')}
-            </button>
-            <button class="btn btn-outline-secondary" data-action="observe" data-id="${table.id}" title="${ctx.t('tableObservers')}">
-              <i class="bi bi-eye"></i> ${ctx.t('observe')}
+            <button class="btn btn-outline-secondary flex-grow-1" data-action="observe" data-id="${table.id}" title="${ctx.t('tableObservers')}">
+              <i class="bi bi-eye me-2"></i> ${ctx.t('observe')}
             </button>
           </div>
           <div class="d-flex justify-content-between align-items-center text-muted small mt-2">
@@ -153,22 +150,43 @@ export const lobbyPage = {
 
       applyTranslations(col, ctx.language);
 
-      const joinBtn = col.querySelector('[data-action="join"]');
-      const observeBtn = col.querySelector('[data-action="observe"]');
-      joinBtn.addEventListener('click', () => {
-        // Store current player info when joining
-        const position = 'south';
-        localStorage.setItem('currentPlayer', JSON.stringify({
-          tableId: table.id,
-          seat: position,
-          joinedAt: new Date().toISOString()
-        }));
-        // Navigate to table view with tableId and position parameters
-        ctx.navigate(`/table?id=${table.id}&position=${position}`);
+      // Add click handlers for seat positions
+      const seatElements = col.querySelectorAll('[data-seat]');
+      seatElements.forEach(seatEl => {
+        const seatPosition = seatEl.getAttribute('data-seat');
+        const tableId = parseInt(seatEl.getAttribute('data-table'), 10);
+        
+        // Only allow clicking if seat is empty
+        if (seatEl.classList.contains('empty')) {
+          seatEl.addEventListener('click', () => {
+            localStorage.setItem('currentPlayer', JSON.stringify({
+              tableId: tableId,
+              seat: seatPosition,
+              joinedAt: new Date().toISOString()
+            }));
+            ctx.navigate(`/table?id=${tableId}&position=${seatPosition}`);
+          });
+        }
       });
+
+      const observeBtn = col.querySelector('[data-action="observe"]');
       observeBtn.addEventListener('click', () => {
         // Clear player info when observing
         localStorage.removeItem('currentPlayer');
+        
+        // Set observer info
+        const observerName = 'Niki'; // Default observer name
+        localStorage.setItem('currentObserver', JSON.stringify({
+          tableId: table.id,
+          name: observerName,
+          joinedAt: new Date().toISOString()
+        }));
+        
+        // Add observer to table observers list
+        if (!table.observers.includes(observerName)) {
+          table.observers.push(observerName);
+        }
+        
         ctx.navigate(`/observer?id=${table.id}`);
       });
 

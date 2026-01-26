@@ -720,7 +720,27 @@ export const tablePage = {
     // Back button
     const backBtn = host.querySelector('[data-action="back-lobby"]');
     if (backBtn) {
-      backBtn.addEventListener('click', () => ctx.navigate('/lobby'));
+      backBtn.addEventListener('click', () => {
+        // Get current player info
+        const currentPlayer = getCurrentPlayer();
+        
+        if (currentPlayer) {
+          // Free up the seat in the table
+          const tableId = currentPlayer.tableId;
+          currentTable.players[currentPlayer.seat] = null;
+          
+          // Clear all table state for this table (deal, bidding, ready)
+          localStorage.removeItem(`tableDealState:${tableId}`);
+          localStorage.removeItem(`tableBiddingState:${tableId}`);
+          localStorage.removeItem(`tableReadyState:${tableId}`);
+        }
+        
+        // Clear current player info
+        localStorage.removeItem('currentPlayer');
+        
+        // Navigate back to lobby
+        ctx.navigate('/lobby');
+      });
     }
 
     // Chat toggle button in header

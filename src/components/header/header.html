@@ -10,6 +10,9 @@
       <span class="badge bg-primary text-uppercase">Bridge</span>
       <span data-i18n="brand"></span>
     </a>
+    <button class="btn btn-outline-secondary btn-sm leave-table-btn" data-action="leave-table" style="display: none; margin-right: 1rem;" data-tooltip="Leave table">
+      <img src="/img/log-out.svg" alt="Leave" style="width: 18px; height: 18px;">
+    </button>
     <button class="navbar-toggler" type="button" aria-label="Toggle navigation" data-nav-toggle>
       <span class="navbar-toggler-icon"></span>
     </button>
@@ -28,10 +31,10 @@
           <a class="nav-link" href="/observer" data-route="/observer"><i class="bi bi-eye me-1"></i><span data-i18n="navObserver"></span></a>
         </li>
       </ul>
-      <div class="d-flex align-items-center gap-2">
-        <i class="bi bi-globe2"></i>
-        <select class="form-select form-select-sm" id="languagePicker" data-language-picker></select>
-      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2 ms-auto">
+      <i class="bi bi-globe2"></i>
+      <select class="form-select form-select-sm" id="languagePicker" data-language-picker></select>
     </div>
   </div>
 </nav>

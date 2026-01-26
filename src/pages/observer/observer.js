@@ -37,7 +37,8 @@ const currentTable = {
     south: 'Elena',
     west: 'Ivan',
     east: 'Maria'
-  }
+  },
+  observers: []
 };
 
 function getTableId() {
@@ -67,6 +68,18 @@ function loadBiddingState(tableId) {
     console.warn('Failed to load bidding state', err);
     return null;
   }
+}
+
+function getCurrentObserver() {
+  try {
+    const observerData = localStorage.getItem('currentObserver');
+    if (observerData) {
+      return JSON.parse(observerData);
+    }
+  } catch (err) {
+    console.warn('Failed to read current observer', err);
+  }
+  return null;
 }
 
 function computeHCP(hand) {
@@ -261,6 +274,165 @@ export const observerPage = {
       callRow.style.display = 'none';
       renderHistory();
     };
+
+    // Setup table header
+    const tableId = getTableId();
+    const currentObserver = getCurrentObserver();
+    
+    const tableTitle = host.querySelector('[data-table-title]');
+    if (tableTitle) {
+      tableTitle.textContent = `${ctx.t('table')} ${tableId}`;
+    }
+
+    // Add current observer to table if exists (FIRST)
+    if (currentObserver && currentObserver.tableId === tableId) {
+      if (!currentTable.observers.includes(currentObserver.name)) {
+        currentTable.observers.push(currentObserver.name);
+      }
+    }
+
+    // Observers indicator in header (AFTER adding observer)
+    const observersIndicator = host.querySelector('[data-observers-indicator]');
+    if (observersIndicator) {
+      const hasObservers = currentTable.observers && currentTable.observers.length > 0;
+      const observerNames = hasObservers ? currentTable.observers.join(', ') : 'No observers';
+      
+      // Create tooltip element
+      const tooltip = document.createElement('div');
+      tooltip.className = 'observers-tooltip';
+      tooltip.textContent = observerNames;
+      
+      observersIndicator.innerHTML = `<i class="bi ${hasObservers ? 'bi-eye-fill' : 'bi-eye'}"></i>`;
+      observersIndicator.className = `observers-indicator ${hasObservers ? 'has-observers' : ''}`;
+      observersIndicator.appendChild(tooltip);
+      
+      // Tooltip show/hide on hover
+      observersIndicator.addEventListener('mouseenter', () => {
+        tooltip.style.opacity = '1';
+        tooltip.style.visibility = 'visible';
+        tooltip.style.transform = 'translateX(-50%) translateY(0)';
+      });
+      
+      observersIndicator.addEventListener('mouseleave', () => {
+        tooltip.style.opacity = '0';
+        tooltip.style.visibility = 'hidden';
+        tooltip.style.transform = 'translateX(-50%) translateY(8px)';
+      });
+    }
+
+    // Leave observer button
+    const leaveBtn = host.querySelector('[data-action="leave-observer"]');
+    if (leaveBtn) {
+      leaveBtn.addEventListener('click', () => {
+        // Remove current observer from table
+        if (currentObserver) {
+          const observerIndex = currentTable.observers.indexOf(currentObserver.name);
+          if (observerIndex > -1) {
+            currentTable.observers.splice(observerIndex, 1);
+          }
+          
+          // Clear observer info
+          localStorage.removeItem('currentObserver');
+        }
+        
+        // Navigate back to lobby
+        ctx.navigate('/lobby');
+      });
+    }
+
+    // Chat drawer for observer - two tabs (table / lobby)
+    const tableChatMessages = [
+      { author: 'Ivan', text: 'Good luck!' },
+      { author: 'Maria', text: "Let's play fair." }
+    ];
+    const lobbyChatMessages = [
+      { author: 'System', text: ctx.t('navObserver') }
+    ];
+    const chatContainer = host.querySelector('[data-chat-container]');
+    const chatDrawer = document.createElement('div');
+    chatDrawer.className = 'chat-drawer';
+    chatDrawer.innerHTML = `
+      <div class="chat-drawer-header" data-chat-header>
+        <div class="chat-tabs">
+          <button class="chat-tab active" data-chat-tab="table" style="background: rgba(31, 156, 117, 0.8); color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 600;">${ctx.t('chatTable')}</button>
+          <button class="chat-tab" data-chat-tab="lobby" style="background: rgba(31, 156, 117, 0.5); color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 600;">${ctx.t('chatLobby')}</button>
+        </div>
+      </div>
+      <div class="chat-drawer-body" data-chat-body-wrapper>
+        <div class="chat-body" data-chat-body></div>
+        <div class="chat-input d-flex gap-2">
+          <input type="text" class="form-control form-control-sm" data-chat-input maxlength="50" placeholder="${ctx.t('chatPlaceholder')}">
+          <button class="btn btn-primary btn-sm" data-chat-send>${ctx.t('chatSend')}</button>
+        </div>
+      </div>
+    `;
+
+    if (chatContainer) {
+      chatContainer.appendChild(chatDrawer);
+    }
+
+    let isChatOpen = false;
+    let activeTab = 'table';
+    const chatBody = chatDrawer.querySelector('[data-chat-body]');
+    const chatInput = chatDrawer.querySelector('[data-chat-input]');
+    const chatSend = chatDrawer.querySelector('[data-chat-send]');
+    const tabButtons = chatDrawer.querySelectorAll('[data-chat-tab]');
+
+    const renderChat = () => {
+      const source = activeTab === 'table' ? tableChatMessages : lobbyChatMessages;
+      chatBody.innerHTML = source
+        .map((msg) => `<div class="chat-message"><strong>${msg.author}:</strong> ${msg.text}</div>`)
+        .join('');
+      chatBody.scrollTop = chatBody.scrollHeight;
+    };
+
+    const addMessage = (text) => {
+      if (!text) return;
+      const target = activeTab === 'table' ? tableChatMessages : lobbyChatMessages;
+      target.push({ author: currentObserver ? currentObserver.name : 'You', text });
+      if (target.length > 50) target.shift();
+      renderChat();
+    };
+
+    tabButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        activeTab = btn.dataset.chatTab;
+        tabButtons.forEach((b) => b.classList.toggle('active', b === btn));
+        renderChat();
+      });
+    });
+
+    chatSend.addEventListener('click', () => {
+      const value = chatInput.value.trim().slice(0, 50);
+      if (!value) return;
+      addMessage(value);
+      chatInput.value = '';
+    });
+
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        chatSend.click();
+      }
+    });
+
+    const chatToggleBtn = host.querySelector('[data-action="toggle-chat"]');
+    if (chatToggleBtn) {
+      chatToggleBtn.addEventListener('click', () => {
+        isChatOpen = !isChatOpen;
+        chatContainer.classList.toggle('open', isChatOpen);
+        if (isChatOpen) {
+          renderChat();
+        }
+      });
+    }
+
+    // Initialize chat hidden
+    if (chatContainer) {
+      chatContainer.classList.remove('open');
+    }
+
+    renderChat();
 
     // Initial render
     renderAllHands();
