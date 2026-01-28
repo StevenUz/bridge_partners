@@ -415,7 +415,7 @@ export const observerPage = {
     const lobbyChatMessages = [
       { author: 'System', text: ctx.t('navObserver') }
     ];
-    const chatContainer = host.querySelector('[data-chat-container]');
+    let chatContainer = host.querySelector('[data-chat-container]');
     const chatDrawer = document.createElement('div');
     chatDrawer.className = 'chat-drawer';
     chatDrawer.innerHTML = `
@@ -436,6 +436,13 @@ export const observerPage = {
 
     if (chatContainer) {
       chatContainer.appendChild(chatDrawer);
+    } else {
+      // Create chat container if it doesn't exist
+      chatContainer = document.createElement('div');
+      chatContainer.className = 'chat-drawer-container';
+      chatContainer.setAttribute('data-chat-container', '');
+      chatContainer.appendChild(chatDrawer);
+      host.appendChild(chatContainer);
     }
 
     let isChatOpen = false;
@@ -485,13 +492,17 @@ export const observerPage = {
 
     const chatToggleBtn = host.querySelector('[data-action="toggle-chat"]');
     if (chatToggleBtn) {
-      chatToggleBtn.addEventListener('click', () => {
+      chatToggleBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         isChatOpen = !isChatOpen;
+        console.log('Observer chat toggle clicked, isChatOpen:', isChatOpen);
         chatContainer.classList.toggle('open', isChatOpen);
         if (isChatOpen) {
           renderChat();
         }
       });
+    } else {
+      console.warn('Chat toggle button not found in observer DOM');
     }
 
     // Initialize chat hidden

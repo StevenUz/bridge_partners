@@ -954,7 +954,6 @@ export const tablePage = {
     }
 
     // Chat toggle button in header
-    const chatToggleHeaderBtn = host.querySelector('[data-action="toggle-chat"]');
     let chatToggleClick = null; // Will be set after chat drawer is created
 
     // Observers indicator in header
@@ -1367,7 +1366,7 @@ export const tablePage = {
     }
 
     // Chat drawer - offcanvas panel (v2)
-    const chatContainer = host.querySelector('[data-chat-container]');
+    let chatContainer = host.querySelector('[data-chat-container]');
     
     const chatDrawer = document.createElement('div');
     chatDrawer.className = 'chat-drawer';
@@ -1388,10 +1387,16 @@ export const tablePage = {
     `;
 
     if (chatContainer) {
+      console.log('Using existing chat container');
       chatContainer.appendChild(chatDrawer);
     } else {
-      host.append(chatContainer);
+      console.log('Creating new chat container');
+      // Create chat container if it doesn't exist
+      chatContainer = document.createElement('div');
+      chatContainer.className = 'chat-drawer-container';
+      chatContainer.setAttribute('data-chat-container', '');
       chatContainer.appendChild(chatDrawer);
+      host.appendChild(chatContainer);
     }
 
     let activeTab = 'table';
@@ -1405,6 +1410,10 @@ export const tablePage = {
 
     // Initialize chat as hidden
     chatContainer.classList.remove('open');
+    chatDrawer.classList.remove('open');
+
+    // Connect header toggle button - search after DOM is fully constructed
+    const chatToggleHeaderBtn = host.querySelector('[data-action="toggle-chat"]');
 
     function trimMessages(list) {
       while (list.length > MAX_CHAT_MESSAGES) list.shift();
@@ -1438,13 +1447,18 @@ export const tablePage = {
 
     // Connect header toggle button
     if (chatToggleHeaderBtn) {
-      chatToggleHeaderBtn.addEventListener('click', () => {
+      chatToggleHeaderBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         isOpen = !isOpen;
+        console.log('Chat toggle clicked, isOpen:', isOpen);
         chatContainer.classList.toggle('open', isOpen);
+        chatDrawer.classList.toggle('open', isOpen);
         if (isOpen) {
           renderChat();
         }
       });
+    } else {
+      console.warn('Chat toggle button not found in DOM');
     }
 
     chatSend.addEventListener('click', () => {
