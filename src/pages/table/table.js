@@ -1,4 +1,5 @@
 import template from './table.html?raw';
+import './table.css';
 import './table-cards.css';
 import { applyTranslations, languages } from '../../i18n/i18n.js';
 import { dealCards } from './card-dealer.js';
@@ -284,6 +285,65 @@ export const tablePage = {
     // Define gameArea early so renderDealAndBidding can use it
     const gameArea = host.querySelector('[data-game-area]');
 
+    const updateActionIndicator = () => {
+      const targetButtons = new Set();
+      const targetPanels = new Set();
+      const targetLabels = new Set();
+      const targetToggles = new Set();
+
+      const markSeat = (seat, { highlightToggle } = {}) => {
+        const mapping = slotMapping.find(m => m.seat === seat);
+        if (mapping) {
+          const panel = visualPanels[mapping.slot];
+          if (panel) {
+            targetPanels.add(panel);
+            const btn = panel.querySelector('.player-name-button');
+            if (btn) targetButtons.add(btn);
+          }
+          const label = host.querySelector(`.hcp-label.hcp-${mapping.slot}`);
+          if (label) targetLabels.add(label);
+        }
+
+        const toggle = host.querySelector(`[data-ready-toggle="${seat}"]`);
+        if (toggle && highlightToggle) {
+          targetToggles.add(toggle);
+        }
+      };
+
+      const dealerSeat = seatOrder[0];
+      const storedBidding = loadBiddingState(currentTable.id);
+      const storedDeal = loadDealState(currentTable.id);
+
+      // If no deal yet, highlight dealer who needs to mark ready
+      if (!storedDeal) {
+        markSeat(dealerSeat, { highlightToggle: !playerReadyState[dealerSeat] });
+      }
+      // If deal exists but all not ready, highlight players who need to mark ready
+      else if (storedDeal && !storedBidding) {
+        ['north', 'south', 'east', 'west'].forEach(seat => {
+          if (!playerReadyState[seat]) {
+            markSeat(seat, { highlightToggle: true });
+          }
+        });
+      }
+      // If bidding state exists, highlight current bidder
+      else if (storedBidding && !storedBidding.ended) {
+        markSeat(storedBidding.currentSeat);
+      }
+
+      const syncClass = (selector, targets) => {
+        host.querySelectorAll(selector).forEach(el => {
+          if (!targets.has(el)) el.classList.remove('action-required');
+        });
+        targets.forEach(el => el.classList.add('action-required'));
+      };
+
+      syncClass('.player-name-button.action-required, .player-name-button', targetButtons);
+      syncClass('.player-position-panel.action-required, .player-position-panel', targetPanels);
+      syncClass('.hcp-label.action-required, .hcp-label', targetLabels);
+      syncClass('.toggle-switch.action-required, .toggle-switch', targetToggles);
+    };
+
     const renderDealAndBidding = () => {
       const storedDeal = loadDealState(currentTable.id);
       const storedBidding = loadBiddingState(currentTable.id);
@@ -527,6 +587,39 @@ export const tablePage = {
           if (redoubleBtn) redoubleBtn.disabled = !isMyTurn || biddingState.ended || !canRedouble();
         };
 
+        const updateTurnIndicator = () => {
+          // Remove active-turn class from all panels
+          slotMapping.forEach(({ slot }) => {
+            const panel = visualPanels[slot];
+            if (panel) {
+              panel.classList.remove('active-turn');
+              const badge = panel.querySelector('.turn-indicator-badge');
+              if (badge) badge.remove();
+            }
+          });
+
+          // Add active-turn class to current player's panel
+          if (!biddingState.ended) {
+            const mapping = slotMapping.find(m => {
+              const seat = ['north', 'south', 'west', 'east'].find(s => currentTable.players[s] && biddingState.currentSeat === s);
+              return m.seat === seat;
+            });
+            
+            if (mapping) {
+              const panel = visualPanels[mapping.slot];
+              if (panel) {
+                panel.classList.add('active-turn');
+                // Add badge showing it's their turn
+                const badge = document.createElement('div');
+                badge.className = 'turn-indicator-badge';
+                badge.innerHTML = '→';
+                badge.title = `${currentTable.players[biddingState.currentSeat]}'s turn`;
+                panel.appendChild(badge);
+              }
+            }
+          }
+        };
+
         const commitState = () => {
           currentDeal.bidding = { ...biddingState };
           currentDeal.bidHistory = [...biddingState.bids];
@@ -556,6 +649,8 @@ export const tablePage = {
           persistBiddingState(currentTable.id, biddingState);
           renderHistory();
           updateButtons();
+          updateTurnIndicator();
+          updateActionIndicator();
 
           // Check if bidding ended and update status
           if (biddingState.ended) {
@@ -612,6 +707,8 @@ export const tablePage = {
 
         renderHistory();
         updateButtons();
+        updateTurnIndicator();
+        updateActionIndicator();
     };
 
     const syncReadyUI = () => {
@@ -623,6 +720,7 @@ export const tablePage = {
         if (playerReadyState[seat]) tg.classList.add('enabled'); else tg.classList.remove('enabled');
       });
       checkAllPlayersReady();
+      updateActionIndicator();
     };
 
     slotMapping.forEach(({ slot, seat }) => {
@@ -647,7 +745,7 @@ export const tablePage = {
       // Create ready toggle container
       const readyContainer = document.createElement('div');
       readyContainer.className = 'player-ready-container';
-      readyContainer.textContent = ctx.language === 'bg' ? 'Готов/а?' : 'Ready?';
+      readyContainer.textContent = ctx.t('ready');
 
       const toggle = document.createElement('div');
       const isViewerSeat = viewerSeat === seat;
@@ -692,10 +790,28 @@ export const tablePage = {
           dealBtn.classList.remove('dealer-ready');
         }
       }
+      
+      // Update action-required indicator
+      updateActionIndicator();
     };
     
     // Initialize check
     syncReadyUI();
+
+    const getDealRaw = () => localStorage.getItem(`tableDealState:${currentTable.id}`);
+    const getBiddingRaw = () => localStorage.getItem(`tableBiddingState:${currentTable.id}`);
+    let lastDealRaw = getDealRaw();
+    let lastBiddingRaw = getBiddingRaw();
+
+    const maybeRenderDealAndBidding = () => {
+      const dealRaw = getDealRaw();
+      const biddingRaw = getBiddingRaw();
+      if (dealRaw !== lastDealRaw || biddingRaw !== lastBiddingRaw) {
+        lastDealRaw = dealRaw;
+        lastBiddingRaw = biddingRaw;
+        renderDealAndBidding();
+      }
+    };
 
     // Listen for storage updates from other tabs to sync ready state in near real time
     const storageHandler = (event) => {
@@ -703,7 +819,7 @@ export const tablePage = {
         syncReadyUI();
       }
       if (event.key === `tableDealState:${currentTable.id}` || event.key === `tableBiddingState:${currentTable.id}`) {
-        renderDealAndBidding();
+        maybeRenderDealAndBidding();
       }
     };
     window.addEventListener('storage', storageHandler);
@@ -711,7 +827,7 @@ export const tablePage = {
     // Fallback polling to keep state fresh if storage events are missed
     const readySyncInterval = setInterval(() => {
       syncReadyUI();
-      renderDealAndBidding();
+      maybeRenderDealAndBidding();
     }, 2000);
 
     // Initial render if deal already exists
@@ -1080,6 +1196,8 @@ export const tablePage = {
           persistBiddingState(currentTable.id, biddingState);
           renderHistory();
           updateButtons();
+          updateTurnIndicator();
+          updateActionIndicator();
         };
 
         // Build bid buttons 1C-7NT
@@ -1124,6 +1242,8 @@ export const tablePage = {
 
         renderHistory();
         updateButtons();
+        updateTurnIndicator();
+        updateActionIndicator();
         
         // Update status when bidding ends and play phase begins
         const checkBiddingComplete = () => {

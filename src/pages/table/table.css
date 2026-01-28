@@ -438,3 +438,138 @@
   font-weight: bold;
   font-size: 1.2rem;
 }
+
+/* Turn indicator for active player */
+.player-position-panel.active-turn {
+  position: relative;
+  border: 3px solid var(--accent-red);
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(192, 57, 43, 0.6), inset 0 0 12px rgba(192, 57, 43, 0.15);
+  background: rgba(192, 57, 43, 0.08);
+  animation: turnPulse 1.5s ease-in-out infinite;
+}
+
+.player-position-panel.active-turn::after {
+  content: '→';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--accent-red);
+  font-weight: bold;
+  font-size: 1.5rem;
+  animation: turnArrowBounce 1.5s ease-in-out infinite;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes turnPulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(192, 57, 43, 0.6), inset 0 0 12px rgba(192, 57, 43, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(192, 57, 43, 0.85), inset 0 0 18px rgba(192, 57, 43, 0.25);
+  }
+}
+
+@keyframes turnArrowBounce {
+  0%, 100% {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateX(-50%) translateY(-4px);
+    opacity: 0.8;
+  }
+}
+
+/* Turn indicator badge overlay */
+.turn-indicator-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: linear-gradient(135deg, var(--accent-red) 0%, #e74c3c 100%);
+  color: white;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.1rem;
+  box-shadow: 0 4px 12px rgba(192, 57, 43, 0.4);
+  animation: turnBadgePulse 1.5s ease-in-out infinite;
+  z-index: 10;
+}
+
+@keyframes turnBadgePulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 4px 12px rgba(192, 57, 43, 0.4);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 6px 18px rgba(192, 57, 43, 0.6);
+  }
+}
+
+/* Player action button blinking animation */
+.player-name-button.action-required {
+  animation: buttonBlink 1.6s ease-in-out infinite alternate, buttonGlow 1.6s ease-in-out infinite alternate;
+  cursor: pointer;
+  box-shadow: 0 0 24px rgba(46, 204, 113, 0.7);
+  border: 2px solid rgba(46, 204, 113, 0.75);
+  font-weight: 600;
+}
+
+/* Panel highlight for readiness view */
+.player-position-panel.action-required {
+  box-shadow: 0 0 14px rgba(46, 204, 113, 0.5);
+  border-radius: 12px;
+}
+
+/* Name label highlight for deal/bidding view */
+.hcp-label.action-required {
+  animation: buttonBlink 1.6s ease-in-out infinite alternate, buttonGlow 1.6s ease-in-out infinite alternate;
+  border: 2px solid rgba(46, 204, 113, 0.85);
+  border-radius: 10px;
+  padding: 0.35rem 0.75rem;
+}
+
+@keyframes buttonBlink {
+  0% {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color: rgba(46, 204, 113, 0.55);
+  }
+  100% {
+    background-color: rgba(46, 204, 113, 0.18);
+    border-color: rgba(46, 204, 113, 0.95);
+  }
+}
+
+@keyframes buttonGlow {
+  0% {
+    box-shadow: 0 0 16px rgba(46, 204, 113, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 36px rgba(46, 204, 113, 0.9), inset 0 0 18px rgba(46, 204, 113, 0.35);
+  }
+}
+
+/* Ready toggle blinking when action required */
+.toggle-switch.action-required {
+  animation: toggleBlink 1.6s ease-in-out infinite alternate;
+  box-shadow: 0 0 16px rgba(46, 204, 113, 0.7);
+}
+
+@keyframes toggleBlink {
+  0% {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-color: rgba(46, 204, 113, 0.45);
+  }
+  100% {
+    background-color: rgba(46, 204, 113, 0.16);
+    border-color: rgba(46, 204, 113, 0.9);
+    box-shadow: inset 0 0 10px rgba(46, 204, 113, 0.25);
+  }
+}

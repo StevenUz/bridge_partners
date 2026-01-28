@@ -686,16 +686,16 @@
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
-  padding: 0.2rem 0.6rem;
+  padding: 0.12rem 0.5rem;
   font-weight: 700;
-  font-size: 0.9rem;
-  z-index: 20;
+  font-size: 0.82rem;
+  z-index: 1;
   pointer-events: none;
 }
 
 .hcp-south,
 .hcp-north {
-  top: 6px;
+  top: 2px;
   left: 50%;
   transform: translateX(-50%);
 }
@@ -732,6 +732,8 @@
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  z-index: 2;
 }
 .hand-north .playing-card:not(:first-child),
 .hand-south .playing-card:not(:first-child) {
