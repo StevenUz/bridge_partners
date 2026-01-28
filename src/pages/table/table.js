@@ -62,6 +62,11 @@ let dealNumber = 1;
 let hcpScores = { north: 0, east: 0, south: 0, west: 0 };
 let biddingState = null;
 
+// Vulnerability cycle - 16 deals pattern
+// "0" = neither vulnerable, "-" = EW vulnerable, "|" = NS vulnerable, "+" = both vulnerable
+const vulnerabilityPattern = "0_-_|_+_-_|_+_0_|_+_0_-_+_0_-_|";
+const vulnerabilityStates = vulnerabilityPattern.split('_').filter(s => s !== '');
+
 // Track ready state for each player
 const playerReadyState = {
   north: false,
@@ -97,6 +102,38 @@ function syncReadyState(tableId, playerReadyState) {
       playerReadyState[seat] = stored[seat];
     }
   });
+}
+
+function getVulnerability(dealNum) {
+  const cyclePosition = (dealNum - 1) % 16;
+  const symbol = vulnerabilityStates[cyclePosition];
+  
+  switch (symbol) {
+    case '0': return { ns: false, ew: false };
+    case '-': return { ns: false, ew: true };
+    case '|': return { ns: true, ew: false };
+    case '+': return { ns: true, ew: true };
+    default: return { ns: false, ew: false };
+  }
+}
+
+function persistVulnerabilityState(tableId, vulnState) {
+  try {
+    localStorage.setItem(`tableVulnerability:${tableId}`, JSON.stringify(vulnState));
+  } catch (err) {
+    console.warn('Failed to persist vulnerability state', err);
+  }
+}
+
+function loadVulnerabilityState(tableId) {
+  try {
+    const raw = localStorage.getItem(`tableVulnerability:${tableId}`);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn('Failed to load vulnerability state', err);
+    return null;
+  }
 }
 
 function persistDealState(tableId, dealState) {
@@ -159,6 +196,43 @@ function getCurrentPlayer() {
     console.warn('Failed to read current player', err);
   }
   return null;
+}
+
+function updateVulnerabilityIndicators(host, ctx, dealNum) {
+  const vulnerability = getVulnerability(dealNum);
+  
+  // North-South partnership (north and south players)
+  const nsElement = host.querySelector('[data-vulnerability-ns]');
+  const nsNamesElement = host.querySelector('[data-vulnerability-names-ns]');
+  const nsStatusElement = host.querySelector('[data-vulnerability-status-ns]');
+  
+  if (nsElement && nsNamesElement && nsStatusElement) {
+    const northName = currentTable.players.north || ctx.t('seatNorth');
+    const southName = currentTable.players.south || ctx.t('seatSouth');
+    
+    nsNamesElement.textContent = `${southName}-${northName}`;
+    nsStatusElement.textContent = vulnerability.ns ? ctx.t('vulnerable') : ctx.t('notVulnerable');
+    
+    nsElement.className = `vulnerability-pair vulnerability-ns ${vulnerability.ns ? 'vulnerable' : 'not-vulnerable'}`;
+  }
+  
+  // East-West partnership (east and west players)
+  const ewElement = host.querySelector('[data-vulnerability-ew]');
+  const ewNamesElement = host.querySelector('[data-vulnerability-names-ew]');
+  const ewStatusElement = host.querySelector('[data-vulnerability-status-ew]');
+  
+  if (ewElement && ewNamesElement && ewStatusElement) {
+    const eastName = currentTable.players.east || ctx.t('seatEast');
+    const westName = currentTable.players.west || ctx.t('seatWest');
+    
+    ewNamesElement.textContent = `${eastName}-${westName}`;
+    ewStatusElement.textContent = vulnerability.ew ? ctx.t('vulnerable') : ctx.t('notVulnerable');
+    
+    ewElement.className = `vulnerability-pair vulnerability-ew ${vulnerability.ew ? 'vulnerable' : 'not-vulnerable'}`;
+  }
+  
+  // Persist vulnerability state for other tabs
+  persistVulnerabilityState(currentTable.id, { dealNumber: dealNum, vulnerability });
 }
 
 function createCardDisplay(hand, position, faceVisible, isRedBack) {
@@ -231,6 +305,11 @@ export const tablePage = {
     }
 
     applyTranslations(host, ctx.language);
+
+    // Initialize vulnerability indicators for current state
+    const storedDeal = loadDealState(currentTable.id);
+    const currentDealNumber = storedDeal?.dealNumber || dealNumber;
+    updateVulnerabilityIndicators(host, ctx, currentDealNumber);
 
     // Hydrate ready state from storage
     syncReadyState(currentTable.id, playerReadyState);
@@ -374,6 +453,9 @@ export const tablePage = {
         isEvenDeal: storedDeal.isEvenDeal
       };
       hcpScores = storedDeal.hcpScores || { north: 0, east: 0, south: 0, west: 0 };
+
+      // Update vulnerability indicators for current deal
+      updateVulnerabilityIndicators(host, ctx, currentDeal.dealNumber);
 
       const isRedBack = currentDeal.isEvenDeal;
 
@@ -820,6 +902,17 @@ export const tablePage = {
       }
       if (event.key === `tableDealState:${currentTable.id}` || event.key === `tableBiddingState:${currentTable.id}`) {
         maybeRenderDealAndBidding();
+        // Update vulnerability indicators when deal state changes
+        const newStoredDeal = loadDealState(currentTable.id);
+        if (newStoredDeal) {
+          updateVulnerabilityIndicators(host, ctx, newStoredDeal.dealNumber);
+        }
+      }
+      if (event.key === `tableVulnerability:${currentTable.id}`) {
+        const vulnState = loadVulnerabilityState(currentTable.id);
+        if (vulnState) {
+          updateVulnerabilityIndicators(host, ctx, vulnState.dealNumber);
+        }
       }
     };
     window.addEventListener('storage', storageHandler);
@@ -845,10 +938,11 @@ export const tablePage = {
           const tableId = currentPlayer.tableId;
           currentTable.players[currentPlayer.seat] = null;
           
-          // Clear all table state for this table (deal, bidding, ready)
+          // Clear all table state for this table (deal, bidding, ready, vulnerability)
           localStorage.removeItem(`tableDealState:${tableId}`);
           localStorage.removeItem(`tableBiddingState:${tableId}`);
           localStorage.removeItem(`tableReadyState:${tableId}`);
+          localStorage.removeItem(`tableVulnerability:${tableId}`);
         }
         
         // Clear current player info
@@ -911,6 +1005,10 @@ export const tablePage = {
         hcpScores.east  = computeHCP(currentDeal.hands.east);
         hcpScores.south = computeHCP(currentDeal.hands.south);
         hcpScores.west  = computeHCP(currentDeal.hands.west);
+        
+        // Update vulnerability indicators for current deal
+        updateVulnerabilityIndicators(host, ctx, dealNumber);
+        
         dealNumber++;
         
         // Persist deal state for other tabs to sync

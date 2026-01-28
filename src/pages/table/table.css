@@ -573,3 +573,92 @@
     box-shadow: inset 0 0 10px rgba(46, 204, 113, 0.25);
   }
 }
+
+/* Vulnerability indicators */
+.vulnerability-indicators {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.vulnerability-pair {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  transition: all 0.3s ease;
+  min-width: 140px;
+}
+
+.vulnerability-names {
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.vulnerability-status {
+  font-size: 0.8rem;
+  text-align: center;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.vulnerability-pair.vulnerable .vulnerability-status {
+  color: #dc3545;
+}
+
+.vulnerability-pair.not-vulnerable .vulnerability-status {
+  color: #333;
+}
+
+@media (max-width: 768px) {
+  .vulnerability-indicators {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .vulnerability-pair {
+    min-width: 120px;
+    padding: 0.5rem 0.75rem;
+  }
+  
+  .vulnerability-names {
+    font-size: 0.8rem;
+  }
+  
+  .vulnerability-status {
+    font-size: 0.7rem;
+  }
+  
+  .header-center {
+    max-width: none;
+    min-width: 200px;
+  }
+}
+
+@media (max-width: 576px) {
+  .table-header {
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+  }
+  
+  .header-left, .header-right, .header-center {
+    width: 100%;
+    justify-content: center;
+    flex: none;
+  }
+  
+  .vulnerability-indicators {
+    flex-direction: row;
+    gap: 1rem;
+    justify-content: space-around;
+  }
+}

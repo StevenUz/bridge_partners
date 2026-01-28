@@ -73,7 +73,9 @@ const translations = {
     statisticsTitle: 'Statistics',
     statisticsComingSoon: 'Player stats, boards, and scores will live here.',
     languagePicker: 'Choose language',
-    saveLanguage: 'Save language'
+    saveLanguage: 'Save language',
+    vulnerable: 'Vulnerable',
+    notVulnerable: 'Not Vulnerable'
   },
   bg: {
     brand: 'Bridge Partners',
@@ -142,7 +144,9 @@ const translations = {
     statisticsTitle: 'Статистика',
     statisticsComingSoon: 'Тук ще бъдат резултати, бордове и точки.',
     languagePicker: 'Избери език',
-    saveLanguage: 'Запази езика'
+    saveLanguage: 'Запази езика',
+    vulnerable: 'В Зона',
+    notVulnerable: 'Без Зона'
   }
 };
 

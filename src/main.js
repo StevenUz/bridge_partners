@@ -93,9 +93,15 @@ window.addEventListener('popstate', () => {
 });
 
 // Initial render
-renderHeader();
-renderPage({ skipHistory: true });
-renderFooter();
+try {
+  renderHeader();
+  renderPage({ skipHistory: true });
+  renderFooter();
+  console.info('App initialized successfully');
+} catch (error) {
+  console.error('Failed to initialize app:', error);
+  app.innerHTML = '<div style="padding: 20px; background: red; color: white;">Error loading app: ' + error.message + '</div>';
+}
 
 // Pre-register routes for dev tools reference
 console.info('Routes available:', routes.map((route) => route.path).join(', '));

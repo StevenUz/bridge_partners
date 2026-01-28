@@ -41,6 +41,34 @@ const currentTable = {
   observers: []
 };
 
+// Vulnerability cycle - 16 deals pattern (same as table.js)
+const vulnerabilityPattern = "0_-_|_+_-_|_+_0_|_+_0_-_+_0_-_|";
+const vulnerabilityStates = vulnerabilityPattern.split('_').filter(s => s !== '');
+
+function getVulnerability(dealNum) {
+  const cyclePosition = (dealNum - 1) % 16;
+  const symbol = vulnerabilityStates[cyclePosition];
+  
+  switch (symbol) {
+    case '0': return { ns: false, ew: false };
+    case '-': return { ns: false, ew: true };
+    case '|': return { ns: true, ew: false };
+    case '+': return { ns: true, ew: true };
+    default: return { ns: false, ew: false };
+  }
+}
+
+function loadVulnerabilityState(tableId) {
+  try {
+    const raw = localStorage.getItem(`tableVulnerability:${tableId}`);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn('Failed to load vulnerability state', err);
+    return null;
+  }
+}
+
 function getTableId() {
   const params = new URLSearchParams(window.location.search);
   const idStr = params.get('id');
@@ -97,6 +125,40 @@ function createCardDisplay(hand, position, faceVisible, isRedBack) {
   return container;
 }
 
+function updateVulnerabilityIndicators(host, ctx, dealNum) {
+  const vulnerability = getVulnerability(dealNum);
+  
+  // North-South partnership (north and south players)
+  const nsElement = host.querySelector('[data-vulnerability-ns]');
+  const nsNamesElement = host.querySelector('[data-vulnerability-names-ns]');
+  const nsStatusElement = host.querySelector('[data-vulnerability-status-ns]');
+  
+  if (nsElement && nsNamesElement && nsStatusElement) {
+    const northName = currentTable.players.north || ctx.t('seatNorth');
+    const southName = currentTable.players.south || ctx.t('seatSouth');
+    
+    nsNamesElement.textContent = `${southName}-${northName}`;
+    nsStatusElement.textContent = vulnerability.ns ? ctx.t('vulnerable') : ctx.t('notVulnerable');
+    
+    nsElement.className = `vulnerability-pair vulnerability-ns ${vulnerability.ns ? 'vulnerable' : 'not-vulnerable'}`;
+  }
+  
+  // East-West partnership (east and west players)
+  const ewElement = host.querySelector('[data-vulnerability-ew]');
+  const ewNamesElement = host.querySelector('[data-vulnerability-names-ew]');
+  const ewStatusElement = host.querySelector('[data-vulnerability-status-ew]');
+  
+  if (ewElement && ewNamesElement && ewStatusElement) {
+    const eastName = currentTable.players.east || ctx.t('seatEast');
+    const westName = currentTable.players.west || ctx.t('seatWest');
+    
+    ewNamesElement.textContent = `${eastName}-${westName}`;
+    ewStatusElement.textContent = vulnerability.ew ? ctx.t('vulnerable') : ctx.t('notVulnerable');
+    
+    ewElement.className = `vulnerability-pair vulnerability-ew ${vulnerability.ew ? 'vulnerable' : 'not-vulnerable'}`;
+  }
+}
+
 export const observerPage = {
   path: '/observer',
   name: 'observer',
@@ -145,8 +207,13 @@ export const observerPage = {
       
       if (!storedDeal) {
         if (centerArea) centerArea.textContent = 'Waiting for deal...';
+        // Initialize vulnerability indicators with default deal number 1
+        updateVulnerabilityIndicators(host, ctx, 1);
         return;
       }
+
+      // Update vulnerability indicators for current deal
+      updateVulnerabilityIndicators(host, ctx, storedDeal.dealNumber);
 
       const hcpScores = storedDeal.hcpScores || {
         north: computeHCP(storedDeal.hands.north || []),
@@ -434,14 +501,28 @@ export const observerPage = {
 
     renderChat();
 
+    // Apply translations and initialize vulnerability
+    applyTranslations(host, ctx.language);
+    
+    // Initialize vulnerability indicators for current state  
+    const storedDeal = loadDealState(tableId);
+    const currentDealNumber = storedDeal?.dealNumber || 1;
+    updateVulnerabilityIndicators(host, ctx, currentDealNumber);
+
     // Initial render
     renderAllHands();
 
     // Sync with storage updates and polling
     const storageHandler = (event) => {
-      const tableId = getTableId();
-      if (event.key === `tableDealState:${tableId}` || event.key === `tableBiddingState:${tableId}`) {
+      const currentTableId = getTableId();
+      if (event.key === `tableDealState:${currentTableId}` || event.key === `tableBiddingState:${currentTableId}`) {
         renderAllHands();
+      }
+      if (event.key === `tableVulnerability:${currentTableId}`) {
+        const vulnState = loadVulnerabilityState(currentTableId);
+        if (vulnState) {
+          updateVulnerabilityIndicators(host, ctx, vulnState.dealNumber);
+        }
       }
     };
     window.addEventListener('storage', storageHandler);
