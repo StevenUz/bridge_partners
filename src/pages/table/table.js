@@ -3,6 +3,7 @@ import './table.css';
 import './table-cards.css';
 import { applyTranslations, languages } from '../../i18n/i18n.js';
 import { dealCards } from './card-dealer.js';
+import { DetermineAuctionResult, CallType } from '../../bridge/auction.js';
 import { createCardElement } from './card-renderer.js';
 
 const seatOrder = ['south', 'west', 'north', 'east'];
@@ -601,6 +602,49 @@ export const tablePage = {
           return null;
         };
 
+        // --- Bidding-to-Play Transition Integration ---
+        function toAuctionCalls(bids) {
+          // Transform local bid objects to auction.js format
+          return bids.map(b => {
+            if (b.type === 'bid') {
+              // b.call: e.g. '2H', '3NT'
+              const level = Number(b.call[0]);
+              const strain = b.call.slice(1);
+              return { type: CallType.BID, level, strain, seat: b.seat.charAt(0).toUpperCase() };
+            } else if (b.type === 'pass') {
+              return { type: CallType.PASS, seat: b.seat.charAt(0).toUpperCase() };
+            } else if (b.type === 'double') {
+              return { type: CallType.DOUBLE, seat: b.seat.charAt(0).toUpperCase() };
+            } else if (b.type === 'redouble') {
+              return { type: CallType.REDOUBLE, seat: b.seat.charAt(0).toUpperCase() };
+            }
+          });
+        }
+
+        function checkAuctionEndAndTransition() {
+          if (!biddingState.ended) return;
+          // Dealer seat in auction.js is 'N'/'E'/'S'/'W'
+          const dealerMap = { north: 'N', east: 'E', south: 'S', west: 'W' };
+          const dealerSeat = dealerMap[biddingState.dealer];
+          const calls = toAuctionCalls(biddingState.bids);
+          const result = DetermineAuctionResult(calls, dealerSeat);
+          if (result.result === 'PassedOut') {
+            // TODO: Show passed out message, reset for next deal
+            const statusEl = host.querySelector('[data-status-text]');
+            if (statusEl) statusEl.textContent = 'Passed Out – No play.';
+          } else if (result.result === 'Contract') {
+            // TODO: Store contract, declarer, dummy, openingLeader in state for play phase
+            // Example: result.contract, result.declarer, result.dummy, result.openingLeader
+            const statusEl = host.querySelector('[data-status-text]');
+            if (statusEl) {
+              statusEl.textContent = `Contract: ${result.contract.level}${result.contract.strain}${result.contract.doubled !== 'None' ? (result.contract.doubled === 'Doubled' ? 'X' : 'XX') : ''} by ${result.declarer} (Dummy: ${result.dummy}, Lead: ${result.openingLeader})`;
+            }
+            // TODO: Trigger play phase UI here
+          }
+        }
+
+        // --- End Integration ---
+
         const renderHistory = () => {
           if (!historyEl) return;
           const headerRow = historyEl.querySelector('[data-bid-header]');
@@ -738,12 +782,9 @@ export const tablePage = {
           if (biddingState.ended) {
             dealBtn.disabled = false;
             dealBtn.classList.add('dealer-ready');
-            const statusEl = host.querySelector('[data-status-text]');
             const hourglassIcon = host.querySelector('[data-hourglass-icon]');
-            if (statusEl) statusEl.textContent = 'Waiting to play...';
-            if (hourglassIcon) {
-              hourglassIcon.classList.remove('hourglass-spinning');
-            }
+            if (hourglassIcon) hourglassIcon.classList.remove('hourglass-spinning');
+            checkAuctionEndAndTransition();
           }
         };
 
