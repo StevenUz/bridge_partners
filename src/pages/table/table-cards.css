@@ -385,11 +385,23 @@
   border-color: rgba(76, 175, 80, 1);
   color: #ffffff;
   box-shadow: 0 0 15px rgba(76, 175, 80, 0.5);
+  animation: dealGlow 1.6s ease-in-out infinite alternate;
 }
 
 .btn[data-action="deal-cards"].dealer-ready:hover {
   background: rgba(76, 175, 80, 1);
   box-shadow: 0 0 20px rgba(76, 175, 80, 0.8);
+}
+
+@keyframes dealGlow {
+  0% {
+    box-shadow: 0 0 8px rgba(76, 175, 80, 0.35), 0 0 0 rgba(76, 175, 80, 0);
+    filter: brightness(1);
+  }
+  100% {
+    box-shadow: 0 0 18px rgba(76, 175, 80, 0.85), 0 0 28px rgba(76, 175, 80, 0.55);
+    filter: brightness(1.08);
+  }
 }
 
 .bidding-panel {
@@ -1192,8 +1204,8 @@
   }
 }
 
-/* Bootstrap form classes override */
-.form-control {
+/* Bootstrap form classes override (chat drawer only) */
+.chat-drawer-container .form-control {
   background: #ffffff !important;
   color: #000000 !important;
   border: 2px solid rgba(31, 156, 117, 1) !important;
@@ -1207,17 +1219,17 @@
   visibility: visible !important;
 }
 
-.form-control:focus {
+.chat-drawer-container .form-control:focus {
   outline: none !important;
   border-color: rgba(31, 156, 117, 1) !important;
   box-shadow: 0 0 0 2px rgba(31, 156, 117, 0.2) !important;
 }
 
-.form-control::placeholder {
+.chat-drawer-container .form-control::placeholder {
   color: #666666 !important;
 }
 
-.btn {
+.chat-drawer-container .btn {
   white-space: nowrap !important;
   flex-shrink: 0 !important;
   padding: 0.5rem 1rem !important;
@@ -1236,21 +1248,21 @@
   visibility: visible !important;
 }
 
-.btn:hover {
+.chat-drawer-container .btn:hover {
   background: rgba(25, 126, 97, 1) !important;
 }
 
-.btn-primary {
+.chat-drawer-container .btn-primary {
   background: rgba(31, 156, 117, 1) !important;
 }
 
-.btn-sm {
+.chat-drawer-container .btn-sm {
   padding: 0.4rem 0.8rem !important;
   font-size: 0.85rem !important;
   min-height: 32px !important;
 }
 
-.form-control-sm {
+.chat-drawer-container .form-control-sm {
   min-height: 32px !important;
   padding: 0.4rem 0.6rem !important;
   font-size: 0.85rem !important;
