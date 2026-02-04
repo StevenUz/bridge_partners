@@ -75,7 +75,9 @@ const translations = {
     languagePicker: 'Choose language',
     saveLanguage: 'Save language',
     vulnerable: 'Vulnerable',
-    notVulnerable: 'Not Vulnerable'
+    notVulnerable: 'Not Vulnerable',
+    vulnerableShort: 'V',
+    notVulnerableShort: 'NV'
   },
   bg: {
     brand: 'Bridge Partners',
@@ -146,7 +148,9 @@ const translations = {
     languagePicker: 'Избери език',
     saveLanguage: 'Запази езика',
     vulnerable: 'В Зона',
-    notVulnerable: 'Без Зона'
+    notVulnerable: 'Без Зона',
+    vulnerableShort: 'З',
+    notVulnerableShort: 'БЗ'
   }
 };
 

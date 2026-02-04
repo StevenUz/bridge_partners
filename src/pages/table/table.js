@@ -63,6 +63,17 @@ let dealNumber = 1;
 let hcpScores = { north: 0, east: 0, south: 0, west: 0 };
 let biddingState = null;
 
+// Play state for tracking tricks after contract
+let playState = {
+  contract: null,        // { level, strain, doubled, declaringSide }
+  declarer: null,        // 'N'/'E'/'S'/'W'
+  dummy: null,           // 'N'/'E'/'S'/'W'
+  openingLeader: null,   // 'N'/'E'/'S'/'W'
+  tricksNS: 0,
+  tricksEW: 0,
+  inProgress: false
+};
+
 // Vulnerability cycle - 16 deals pattern
 // "0" = neither vulnerable, "-" = EW vulnerable, "|" = NS vulnerable, "+" = both vulnerable
 const vulnerabilityPattern = "0_-_|_+_-_|_+_0_|_+_0_-_+_0_-_|";
@@ -234,6 +245,67 @@ function updateVulnerabilityIndicators(host, ctx, dealNum) {
   
   // Persist vulnerability state for other tabs
   persistVulnerabilityState(currentTable.id, { dealNumber: dealNum, vulnerability });
+}
+
+// Update vulnerability indicators with contract and tricks after bidding ends
+function updateVulnerabilityWithContract(host, ctx, dealNum, playState) {
+  const vulnerability = getVulnerability(dealNum);
+  const { contract, tricksNS, tricksEW } = playState;
+  
+  // Format contract string: e.g. "3NT", "4HX", "6SXX"
+  const contractStr = contract 
+    ? `${contract.level}${contract.strain}${contract.doubled === 'Doubled' ? 'X' : (contract.doubled === 'Redoubled' ? 'XX' : '')}`
+    : '';
+  
+  // North-South partnership
+  const nsElement = host.querySelector('[data-vulnerability-ns]');
+  const nsNamesElement = host.querySelector('[data-vulnerability-names-ns]');
+  const nsStatusElement = host.querySelector('[data-vulnerability-status-ns]');
+  
+  if (nsElement && nsNamesElement && nsStatusElement) {
+    const northName = currentTable.players.north || ctx.t('seatNorth');
+    const southName = currentTable.players.south || ctx.t('seatSouth');
+    
+    nsNamesElement.textContent = `${southName}-${northName}`;
+    
+    // Abbreviated vulnerability: V/NV (З/БЗ in BG)
+    const vulnShort = vulnerability.ns ? ctx.t('vulnerableShort') : ctx.t('notVulnerableShort');
+    
+    // If NS is declaring side, show contract
+    if (contract && contract.declaringSide === 'NS') {
+      nsStatusElement.textContent = `${vulnShort} - ${contractStr} - ${tricksNS}`;
+    } else {
+      nsStatusElement.textContent = `${vulnShort} - ${tricksNS}`;
+    }
+    
+    nsElement.className = `vulnerability-pair vulnerability-ns ${vulnerability.ns ? 'vulnerable' : 'not-vulnerable'}`;
+    console.log('[vuln] NS status ->', nsStatusElement.textContent);
+  }
+  
+  // East-West partnership
+  const ewElement = host.querySelector('[data-vulnerability-ew]');
+  const ewNamesElement = host.querySelector('[data-vulnerability-names-ew]');
+  const ewStatusElement = host.querySelector('[data-vulnerability-status-ew]');
+  
+  if (ewElement && ewNamesElement && ewStatusElement) {
+    const eastName = currentTable.players.east || ctx.t('seatEast');
+    const westName = currentTable.players.west || ctx.t('seatWest');
+    
+    ewNamesElement.textContent = `${eastName}-${westName}`;
+    
+    // Abbreviated vulnerability: V/NV (З/БЗ in BG)
+    const vulnShort = vulnerability.ew ? ctx.t('vulnerableShort') : ctx.t('notVulnerableShort');
+    
+    // If EW is declaring side, show contract
+    if (contract && contract.declaringSide === 'EW') {
+      ewStatusElement.textContent = `${vulnShort} - ${contractStr} - ${tricksEW}`;
+    } else {
+      ewStatusElement.textContent = `${vulnShort} - ${tricksEW}`;
+    }
+    
+    ewElement.className = `vulnerability-pair vulnerability-ew ${vulnerability.ew ? 'vulnerable' : 'not-vulnerable'}`;
+    console.log('[vuln] EW status ->', ewStatusElement.textContent);
+  }
 }
 
 function createCardDisplay(hand, position, faceVisible, isRedBack) {
@@ -629,17 +701,27 @@ export const tablePage = {
           const calls = toAuctionCalls(biddingState.bids);
           const result = DetermineAuctionResult(calls, dealerSeat);
           if (result.result === 'PassedOut') {
-            // TODO: Show passed out message, reset for next deal
+            // Show passed out message, reset for next deal
             const statusEl = host.querySelector('[data-status-text]');
             if (statusEl) statusEl.textContent = 'Passed Out – No play.';
+            playState.inProgress = false;
           } else if (result.result === 'Contract') {
-            // TODO: Store contract, declarer, dummy, openingLeader in state for play phase
-            // Example: result.contract, result.declarer, result.dummy, result.openingLeader
+            // Store contract, declarer, dummy, openingLeader in state for play phase
+            playState.contract = result.contract;
+            playState.declarer = result.declarer;
+            playState.dummy = result.dummy;
+            playState.openingLeader = result.openingLeader;
+            playState.tricksNS = 0;
+            playState.tricksEW = 0;
+            playState.inProgress = true;
+
             const statusEl = host.querySelector('[data-status-text]');
             if (statusEl) {
               statusEl.textContent = `Contract: ${result.contract.level}${result.contract.strain}${result.contract.doubled !== 'None' ? (result.contract.doubled === 'Doubled' ? 'X' : 'XX') : ''} by ${result.declarer} (Dummy: ${result.dummy}, Lead: ${result.openingLeader})`;
             }
-            // TODO: Trigger play phase UI here
+
+            // Update vulnerability indicators with contract and tricks
+            updateVulnerabilityWithContract(host, ctx, currentDeal.dealNumber, playState);
           }
         }
 
@@ -769,6 +851,7 @@ export const tablePage = {
 
           biddingState.passCount = type === 'pass' ? biddingState.passCount + 1 : 0;
           biddingState.ended = biddingState.passCount >= 3 && biddingState.bids.some((b) => b.type === 'bid');
+          console.log('[bidding] call=', call, 'type=', type, 'passCount=', biddingState.passCount, 'ended=', biddingState.ended);
           biddingState.currentSeat = nextSeat(biddingState.currentSeat);
 
           commitState();
@@ -1336,6 +1419,57 @@ export const tablePage = {
           updateButtons();
           updateTurnIndicator();
           updateActionIndicator();
+
+          // Check if bidding ended and transition to play phase
+          if (biddingState.ended) {
+            // Dealer seat in auction.js is 'N'/'E'/'S'/'W'
+            const dealerMap = { north: 'N', east: 'E', south: 'S', west: 'W' };
+            const dealerSeatCode = dealerMap[biddingState.dealer];
+            
+            // Transform local bid objects to auction.js format
+            const auctionCalls = biddingState.bids.map(b => {
+              if (b.type === 'bid') {
+                const level = Number(b.call[0]);
+                const strain = b.call.slice(1);
+                return { type: CallType.BID, level, strain, seat: b.seat.charAt(0).toUpperCase() };
+              } else if (b.type === 'pass') {
+                return { type: CallType.PASS, seat: b.seat.charAt(0).toUpperCase() };
+              } else if (b.type === 'double') {
+                return { type: CallType.DOUBLE, seat: b.seat.charAt(0).toUpperCase() };
+              } else if (b.type === 'redouble') {
+                return { type: CallType.REDOUBLE, seat: b.seat.charAt(0).toUpperCase() };
+              }
+            });
+            
+            console.log('[auction] calls=', auctionCalls, 'dealer=', dealerSeatCode);
+            const result = DetermineAuctionResult(auctionCalls, dealerSeatCode);
+            console.log('[auction] result=', result);
+            
+            if (result.result === 'PassedOut') {
+              const statusEl = host.querySelector('[data-status-text]');
+              if (statusEl) statusEl.textContent = 'Passed Out – No play.';
+              playState.inProgress = false;
+            } else if (result.result === 'Contract') {
+              playState.contract = result.contract;
+              playState.declarer = result.declarer;
+              playState.dummy = result.dummy;
+              playState.openingLeader = result.openingLeader;
+              playState.tricksNS = 0;
+              playState.tricksEW = 0;
+              playState.inProgress = true;
+
+              const statusEl = host.querySelector('[data-status-text]');
+              if (statusEl) {
+                statusEl.textContent = `Contract: ${result.contract.level}${result.contract.strain}${result.contract.doubled !== 'None' ? (result.contract.doubled === 'Doubled' ? 'X' : 'XX') : ''} by ${result.declarer} (Dummy: ${result.dummy}, Lead: ${result.openingLeader})`;
+              }
+
+              // Persist playState so other tabs/observers can pick it up
+              try { localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState)); } catch (e) { console.warn('Failed to persist playState', e); }
+              // Update vulnerability indicators with contract and tricks
+              console.log('[play] storing playState and updating vulnerability', playState);
+              updateVulnerabilityWithContract(host, ctx, currentDeal.dealNumber, playState);
+            }
+          }
         };
 
         // Build bid buttons 1C-7NT
