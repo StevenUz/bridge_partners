@@ -2,6 +2,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles/main.css';
 
 import { applyTranslations, getLanguage, setLanguage, t } from './i18n/i18n.js';
+import { supabaseClient } from './supabase.js';
 import { createFooter } from './components/footer/footer.js';
 import { createHeader } from './components/header/header.js';
 import { matchRoute } from './routes.js';
@@ -30,7 +31,8 @@ function buildContext() {
     t: (key) => t(state.language, key),
     applyTranslations: (root) => applyTranslations(root, state.language),
     onLanguageChange: handleLanguageChange,
-    navigate: (path) => navigate(path)
+    navigate: (path) => navigate(path),
+    supabaseClient: supabaseClient
   };
 }
 
