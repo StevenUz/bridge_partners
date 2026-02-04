@@ -9,6 +9,7 @@
     "preview": "vite preview --host --port 5000"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.94.1",
     "bootstrap": "^5.3.3"
   },
   "devDependencies": {

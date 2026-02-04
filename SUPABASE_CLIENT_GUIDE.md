@@ -69,7 +69,7 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 ```
 
 ### 2. Authentication
@@ -117,7 +117,7 @@ const { data: { user } } = await supabase.auth.getUser();
 ### Step 1: Create Room
 
 ```typescript
-const { data: roomId, error } = await supabase.rpc('create_room', {
+const { data: roomId, error } = await supabaseClient.rpc('create_room', {
   p_code: 'TABLE123'
 });
 
@@ -128,13 +128,13 @@ console.log('Room created:', roomId);
 
 ```typescript
 // Join as player
-const { data, error } = await supabase.rpc('join_room', {
+const { data, error } = await supabaseClient.rpc('join_room', {
   p_room_code: 'TABLE123',
   p_as_spectator: false
 });
 
 // Join as spectator
-await supabase.rpc('join_room', {
+await supabaseClient.rpc('join_room', {
   p_room_code: 'TABLE123',
   p_as_spectator: true
 });
@@ -144,7 +144,7 @@ await supabase.rpc('join_room', {
 
 ```typescript
 // Seat numbers: 0=North, 1=East, 2=South, 3=West
-const { data, error } = await supabase.rpc('take_seat', {
+const { data, error } = await supabaseClient.rpc('take_seat', {
   p_room_id: roomId,
   p_seat: 0  // North
 });
@@ -186,7 +186,7 @@ const channel = supabase
 
 ```typescript
 async function refreshSnapshot() {
-  const { data: snapshot, error } = await supabase.rpc('room_snapshot', {
+  const { data: snapshot, error } = await supabaseClient.rpc('room_snapshot', {
     p_room_id: roomId
   });
   
@@ -209,7 +209,7 @@ async function refreshSnapshot() {
 ### Step 6: Start Match (When 4 Seated)
 
 ```typescript
-const { data: matchId, error } = await supabase.rpc('start_match', {
+const { data: matchId, error } = await supabaseClient.rpc('start_match', {
   p_room_id: roomId
 });
 
@@ -225,7 +225,7 @@ if (error) {
 
 ```typescript
 // Make a bid
-const { data, error } = await supabase.rpc('submit_call', {
+const { data, error } = await supabaseClient.rpc('submit_call', {
   p_board_id: boardId,
   p_call_type: 'bid',
   p_level: 3,
@@ -233,13 +233,13 @@ const { data, error } = await supabase.rpc('submit_call', {
 });
 
 // Pass
-await supabase.rpc('submit_call', {
+await supabaseClient.rpc('submit_call', {
   p_board_id: boardId,
   p_call_type: 'pass'
 });
 
 // Double
-await supabase.rpc('submit_call', {
+await supabaseClient.rpc('submit_call', {
   p_board_id: boardId,
   p_call_type: 'double'
 });
@@ -254,7 +254,7 @@ await supabase.rpc('submit_call', {
 
 ```typescript
 // Card format: "AS" (Ace of Spades), "10H" (10 of Hearts), "2C", etc.
-const { data, error } = await supabase.rpc('play_card', {
+const { data, error } = await supabaseClient.rpc('play_card', {
   p_board_id: boardId,
   p_card: 'AS'
 });
@@ -325,7 +325,7 @@ function handleGameEvent(event) {
 ## 🎮 Complete Example: Game Session
 
 ```typescript
-import { supabase } from './supabase';
+import { supabaseClient } from './supabase';
 
 class BridgeGame {
   roomId: string;

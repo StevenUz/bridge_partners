@@ -1,16 +1,87 @@
-<section class="py-4">
-  <div class="container">
-    <div class="row justify-content-center">
-      <div class="col-lg-8">
-        <div class="card shadow-sm border-0 fade-in">
-          <div class="card-body p-4 text-center">
-            <div class="mb-3">
-              <i class="bi bi-bar-chart-line display-1 text-muted opacity-50"></i>
-            </div>
-            <h1 class="h4 mb-3"><i class="bi bi-graph-up-arrow me-2"></i><span data-i18n="statisticsTitle"></span></h1>
-            <p class="text-muted mb-0"><i class="bi bi-clock-history me-1"></i><span data-i18n="statisticsComingSoon"></span></p>
-          </div>
-        </div>
+<section class="statistics-page py-4">
+  <div class="container-fluid">
+    <h1 class="mb-4"><i class="bi bi-graph-up-arrow me-2"></i><span data-i18n="statisticsTitle"></span></h1>
+    
+    <!-- Participation Table -->
+    <div class="stats-card mb-4">
+      <h2 class="stats-title" data-i18n="participationTitle">Участие в игри</h2>
+      <div class="table-wrapper">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th data-i18n="playerCol">Играч</th>
+              <th data-i18n="totalGamesCol">Всич</th>
+              <th data-i18n="declarerCol">Раз</th>
+              <th data-i18n="dummyCol">Мор</th>
+              <th data-i18n="defenderCol">Защ</th>
+            </tr>
+          </thead>
+          <tbody id="participation-tbody">
+            <tr><td colspan="5" class="text-center text-muted py-3">Зареждане...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Contract Success Table -->
+    <div class="stats-card mb-4">
+      <h2 class="stats-title" data-i18n="contractsTitle">Успех на договори</h2>
+      <div class="table-wrapper">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th data-i18n="playerCol">Играч</th>
+              <th data-i18n="madeCol">Изка</th>
+              <th data-i18n="failedCol">Неиз</th>
+              <th data-i18n="defeatCol">Вкар</th>
+              <th data-i18n="defeatPctCol">% Вкар</th>
+            </tr>
+          </thead>
+          <tbody id="contracts-tbody">
+            <tr><td colspan="5" class="text-center text-muted py-3">Зареждане...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Scoring & Slams Table -->
+    <div class="stats-card mb-4">
+      <h2 class="stats-title" data-i18n="scoringTitle">Точки и шлемове</h2>
+      <div class="table-wrapper">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th data-i18n="playerCol">Играч</th>
+              <th data-i18n="scoreCol">Точ</th>
+              <th data-i18n="smallSlamsCol">Мал6</th>
+              <th data-i18n="grandSlamsCol">Гол7</th>
+            </tr>
+          </thead>
+          <tbody id="scoring-tbody">
+            <tr><td colspan="4" class="text-center text-muted py-3">Зареждане...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Partnerships Table -->
+    <div class="stats-card mb-4">
+      <h2 class="stats-title" data-i18n="partnersTitle">Партньорства</h2>
+      <div class="table-wrapper">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th data-i18n="playerCol">Играч 1</th>
+              <th data-i18n="partnerCol">Играч 2</th>
+              <th data-i18n="gamesCol">Игри</th>
+              <th data-i18n="winsCol">Побе</th>
+              <th data-i18n="winRateCol">% Побе</th>
+            </tr>
+          </thead>
+          <tbody id="partnerships-tbody">
+            <tr><td colspan="5" class="text-center text-muted py-3">Зареждане...</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>

@@ -174,35 +174,35 @@ POLICY "Room members can see public hands"
 ### Setup
 ```typescript
 import { createClient } from '@supabase/supabase-js';
-export const supabase = createClient(url, key);
+export const supabaseClient = createClient(url, key);
 ```
 
 ### Game Flow
 ```typescript
 // 1. Create & join
-const { data: roomId } = await supabase.rpc('create_room', { p_code: 'TABLE123' });
+const { data: roomId } = await supabaseClient.rpc('create_room', { p_code: 'TABLE123' });
 
 // 2. Take seat
-await supabase.rpc('take_seat', { p_room_id: roomId, p_seat: 0 });
+await supabaseClient.rpc('take_seat', { p_room_id: roomId, p_seat: 0 });
 
 // 3. Subscribe to events
-supabase.channel(`room:${roomId}`)
+supabaseClient.channel(`room:${roomId}`)
   .on('postgres_changes', { table: 'game_events', ... }, handleEvent)
   .subscribe();
 
 // 4. Start game
-await supabase.rpc('start_match', { p_room_id: roomId });
+await supabaseClient.rpc('start_match', { p_room_id: roomId });
 
 // 5. Auction
-await supabase.rpc('submit_call', { 
+await supabaseClient.rpc('submit_call', { 
   p_board_id, p_call_type: 'bid', p_level: 3, p_strain: 'notrump' 
 });
 
 // 6. Play cards
-await supabase.rpc('play_card', { p_board_id, p_card: 'AS' });
+await supabaseClient.rpc('play_card', { p_board_id, p_card: 'AS' });
 
 // 7. Get state
-const { data } = await supabase.rpc('room_snapshot', { p_room_id: roomId });
+const { data } = await supabaseClient.rpc('room_snapshot', { p_room_id: roomId });
 ```
 
 ### Real-time Events

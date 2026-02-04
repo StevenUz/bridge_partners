@@ -36,6 +36,12 @@ function buildContext() {
 
 function handleLanguageChange(language) {
   state.language = setLanguage(language);
+  
+  // Dispatch language change event BEFORE re-rendering
+  window.dispatchEvent(new CustomEvent('languageChange', { 
+    detail: { language: state.language } 
+  }));
+  
   renderHeader();
   renderPage({ skipHistory: true });
 }
