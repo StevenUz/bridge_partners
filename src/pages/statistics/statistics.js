@@ -20,47 +20,12 @@ export const statisticsPage = {
 
     container.append(host);
 
-    // Store root and language for language changes
+    // Store root and language for rendering
     currentRoot = host;
     currentLanguage = ctx.language;
 
     // Load statistics data
     await loadStatistics(host, ctx.language);
-
-    // Listen for language changes
-    const languageChangeHandler = (e) => {
-      const newLanguage = e.detail?.language || currentLanguage;
-      currentLanguage = newLanguage;
-      
-      console.log('Language changed to:', newLanguage);
-      
-      // Apply translations to all elements with data-i18n attribute
-      applyTranslations(host, newLanguage);
-      
-      // Explicitly update table headers
-      host.querySelectorAll('[data-i18n]').forEach(element => {
-        const key = element.getAttribute('data-i18n');
-        element.textContent = t(newLanguage, key);
-      });
-      
-      // Re-render tables with new language
-      if (currentPartnerships && currentPartnerships.length > 0) {
-        renderPartnershipsTable(host, currentPartnerships);
-      }
-      
-      if (currentStats && currentStats.length > 0) {
-        renderParticipationTable(host, currentStats, newLanguage);
-        renderContractsTable(host, currentStats);
-        renderScoringTable(host, currentStats);
-      }
-    };
-    
-    window.addEventListener('languageChange', languageChangeHandler);
-    
-    // Cleanup on unmount
-    return () => {
-      window.removeEventListener('languageChange', languageChangeHandler);
-    };
   }
 };
 

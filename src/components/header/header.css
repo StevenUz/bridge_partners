@@ -146,3 +146,28 @@
   opacity: 1;
   visibility: visible;
 }
+
+/* Fullscreen button */
+[data-fullscreen-toggle] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 31px;
+  padding: 0;
+  border-color: #3b8a6a;
+  color: #f1f7f3;
+  background-color: transparent;
+  transition: all 0.3s ease;
+}
+
+[data-fullscreen-toggle]:hover {
+  border-color: var(--velvet-bright);
+  background-color: rgba(45, 138, 102, 0.2);
+  color: #ffffff;
+}
+
+[data-fullscreen-toggle] i {
+  font-size: 1rem;
+  line-height: 1;
+}

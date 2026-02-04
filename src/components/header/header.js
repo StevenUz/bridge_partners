@@ -12,6 +12,7 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
   const languagePicker = nav.querySelector('[data-language-picker]');
   const brand = nav.querySelector('[data-brand]');
   const navList = nav.querySelector('[data-nav-list]');
+  const fullscreenBtn = nav.querySelector('[data-fullscreen-toggle]');
 
   // Extract table id from current URL if on table or observer page
   const getTableId = () => {
@@ -68,6 +69,7 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
     }
     link.addEventListener('click', (event) => {
       event.preventDefault();
+      console.log('Navigation clicked:', href);
       onNavigate(href);
       collapse.classList.remove('show');
     });

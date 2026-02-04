@@ -36,12 +36,6 @@ function buildContext() {
 
 function handleLanguageChange(language) {
   state.language = setLanguage(language);
-  
-  // Dispatch language change event BEFORE re-rendering
-  window.dispatchEvent(new CustomEvent('languageChange', { 
-    detail: { language: state.language } 
-  }));
-  
   renderHeader();
   renderPage({ skipHistory: true });
 }
@@ -55,6 +49,51 @@ function renderHeader() {
     onLanguageChange: handleLanguageChange
   });
   headerHost.append(header);
+  
+  // Setup fullscreen button after header is rendered
+  setTimeout(() => setupFullscreenButton(), 0);
+}
+
+function setupFullscreenButton() {
+  const fullscreenBtn = document.querySelector('[data-fullscreen-toggle]');
+  if (!fullscreenBtn) return;
+  
+  const updateIcon = () => {
+    const icon = fullscreenBtn.querySelector('i');
+    if (!icon) return;
+    
+    if (document.fullscreenElement) {
+      icon.className = 'bi bi-fullscreen-exit';
+      fullscreenBtn.title = 'Exit fullscreen';
+    } else {
+      icon.className = 'bi bi-fullscreen';
+      fullscreenBtn.title = 'Enter fullscreen';
+    }
+  };
+  
+  // Remove old listener if exists
+  if (fullscreenBtn._clickHandler) {
+    fullscreenBtn.removeEventListener('click', fullscreenBtn._clickHandler);
+  }
+  
+  // Add new listener
+  fullscreenBtn._clickHandler = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+      updateIcon();
+    } catch (err) {
+      console.error('Error toggling fullscreen:', err);
+    }
+  };
+  
+  fullscreenBtn.addEventListener('click', fullscreenBtn._clickHandler);
+  updateIcon();
 }
 
 function renderFooter() {
@@ -62,7 +101,7 @@ function renderFooter() {
   footerHost.append(createFooter({ t: (key) => t(state.language, key) }));
 }
 
-function renderPage({ skipHistory = false } = {}) {
+async function renderPage({ skipHistory = false } = {}) {
   if (cleanupPage) {
     cleanupPage();
     cleanupPage = null;
@@ -70,7 +109,7 @@ function renderPage({ skipHistory = false } = {}) {
 
   mainHost.innerHTML = '';
   const page = state.currentRoute;
-  cleanupPage = page.render(mainHost, buildContext()) || null;
+  cleanupPage = await page.render(mainHost, buildContext()) || null;
 
   if (!skipHistory) {
     history.replaceState({}, '', page.path);
@@ -78,7 +117,10 @@ function renderPage({ skipHistory = false } = {}) {
 }
 
 function navigate(path) {
+  console.log('Navigate called with path:', path);
   const targetRoute = matchRoute(path);
+  console.log('Target route:', targetRoute);
+  
   if (state.currentRoute.path === targetRoute.path) {
     history.pushState({}, '', path);
     renderPage({ skipHistory: true });
@@ -104,6 +146,11 @@ try {
   renderPage({ skipHistory: true });
   renderFooter();
   console.info('App initialized successfully');
+  
+  // Global fullscreen change handler (for F11 key)
+  document.addEventListener('fullscreenchange', () => {
+    setupFullscreenButton();
+  });
 } catch (error) {
   console.error('Failed to initialize app:', error);
   app.innerHTML = '<div style="padding: 20px; background: red; color: white;">Error loading app: ' + error.message + '</div>';
