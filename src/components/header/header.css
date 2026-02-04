@@ -152,13 +152,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
+  width: 31px !important;
+  min-width: 31px;
   height: 31px;
   padding: 0;
   border-color: #3b8a6a;
   color: #f1f7f3;
   background-color: transparent;
   transition: all 0.3s ease;
+  flex-shrink: 0;
 }
 
 [data-fullscreen-toggle]:hover {
