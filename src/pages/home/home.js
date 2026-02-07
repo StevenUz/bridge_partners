@@ -107,6 +107,7 @@ export const homePage = {
             : { username: displayName, display_name: displayName };
 
           localStorage.setItem('currentUser', JSON.stringify(profile));
+          sessionStorage.setItem('currentUser', JSON.stringify(profile));
         } catch (err) {
           console.warn('Failed to persist current user', err);
         }
@@ -160,11 +161,13 @@ export const homePage = {
         // Successful login
         const profile = data[0];
         try {
-          localStorage.setItem('currentUser', JSON.stringify({
+          const payload = {
             id: profile.id,
             username: profile.username,
             display_name: profile.display_name
-          }));
+          };
+          localStorage.setItem('currentUser', JSON.stringify(payload));
+          sessionStorage.setItem('currentUser', JSON.stringify(payload));
         } catch (err) {
           console.warn('Failed to persist current user', err);
         }

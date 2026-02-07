@@ -347,12 +347,14 @@ function renderRooms(grid, rooms, ctx) {
             }, { onConflict: 'room_id,seat_position' });
 
           const playerName = profile.username || profile.display_name || 'Player';
-          localStorage.setItem('currentPlayer', JSON.stringify({
+          const playerPayload = {
             tableId: tableId,
             seat: seatPosition,
             name: playerName,
             joinedAt: new Date().toISOString()
-          }));
+          };
+          localStorage.setItem('currentPlayer', JSON.stringify(playerPayload));
+          sessionStorage.setItem('currentPlayer', JSON.stringify(playerPayload));
           ctx.navigate(`/table?id=${tableId}&position=${seatPosition}`);
         });
       }
@@ -373,11 +375,13 @@ function renderRooms(grid, rooms, ctx) {
         .upsert({ room_id: table.id, profile_id: profile.id, role: 'spectator' }, { onConflict: 'room_id,profile_id,role' });
 
       const observerName = profile.username || profile.display_name || 'Observer';
-      localStorage.setItem('currentObserver', JSON.stringify({
+      const observerPayload = {
         tableId: table.id,
         name: observerName,
         joinedAt: new Date().toISOString()
-      }));
+      };
+      localStorage.setItem('currentObserver', JSON.stringify(observerPayload));
+      sessionStorage.setItem('currentObserver', JSON.stringify(observerPayload));
 
       ctx.navigate(`/observer?id=${table.id}`);
     });

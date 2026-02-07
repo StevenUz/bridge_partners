@@ -202,6 +202,10 @@ function getTableId() {
 
 function getCurrentPlayer() {
   try {
+    const sessionPlayer = sessionStorage.getItem('currentPlayer');
+    if (sessionPlayer) {
+      return JSON.parse(sessionPlayer);
+    }
     const playerData = localStorage.getItem('currentPlayer');
     if (playerData) {
       return JSON.parse(playerData);
@@ -1733,6 +1737,8 @@ export const tablePage = {
 
     let activeTab = 'table';
     let isOpen = false;  // Start hidden
+    let chatTableChannel = null;
+    let chatLobbyChannel = null;
 
     const chatBody = chatDrawer.querySelector('[data-chat-body]');
     const chatInput = chatDrawer.querySelector('[data-chat-input]');
@@ -1751,6 +1757,12 @@ export const tablePage = {
       while (list.length > MAX_CHAT_MESSAGES) list.shift();
     }
 
+    const normalizeMessage = (msg) => ({
+      id: msg.id,
+      author: msg.author || 'Unknown',
+      text: msg.text || msg.message || ''
+    });
+
     function renderChat() {
       const source = activeTab === 'table' ? tableChatMessages : lobbyChatMessages;
       const lastMessages = source.slice(-MAX_CHAT_MESSAGES);
@@ -1761,12 +1773,104 @@ export const tablePage = {
       chatHeader.classList.remove('blink');
     }
 
-    function addMessage(text) {
-      if (!text) return;
-      const target = activeTab === 'table' ? tableChatMessages : lobbyChatMessages;
-      target.push({ author: 'You', text });
+    const getChatAuthor = () => {
+      if (viewerSeat && currentTable.players?.[viewerSeat]) {
+        return currentTable.players[viewerSeat];
+      }
+      try {
+        const storedSessionUser = sessionStorage.getItem('currentUser');
+        if (storedSessionUser) {
+          const currentUser = JSON.parse(storedSessionUser);
+          if (currentUser?.username) return currentUser.username;
+          if (currentUser?.display_name) return currentUser.display_name;
+        }
+
+        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+        if (currentUser?.username) return currentUser.username;
+        if (currentUser?.display_name) return currentUser.display_name;
+      } catch (err) {
+        console.warn('Failed to read current user', err);
+      }
+      return 'Player';
+    };
+
+    const applyMessages = (target, rows) => {
+      const normalized = rows.map(normalizeMessage);
+      target.splice(0, target.length, ...normalized);
       trimMessages(target);
-      renderChat();
+    };
+
+    const loadChatMessages = async (scope) => {
+      if (!ctx.supabaseClient) return;
+      const query = ctx.supabaseClient
+        .from('chat_messages')
+        .select('id, scope, room_id, author, message, created_at')
+        .eq('scope', scope)
+        .order('created_at', { ascending: true })
+        .limit(MAX_CHAT_MESSAGES);
+
+      if (scope === 'table') {
+        query.eq('room_id', currentTable.id);
+      }
+
+      if (scope === 'lobby') {
+        query.is('room_id', null);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('Failed to load chat messages', error);
+        return;
+      }
+
+      if (scope === 'table') {
+        applyMessages(tableChatMessages, data || []);
+      } else {
+        applyMessages(lobbyChatMessages, data || []);
+      }
+    };
+
+    async function addMessage(text) {
+      if (!text) return;
+
+      if (!ctx.supabaseClient) {
+        const target = activeTab === 'table' ? tableChatMessages : lobbyChatMessages;
+        target.push({ author: 'You', text });
+        trimMessages(target);
+        renderChat();
+        return;
+      }
+
+      let profileId = null;
+      try {
+        const storedSessionUser = sessionStorage.getItem('currentUser');
+        if (storedSessionUser) {
+          const sessionUser = JSON.parse(storedSessionUser);
+          profileId = sessionUser?.id || null;
+        }
+        if (!profileId) {
+          const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+          profileId = currentUser?.id || null;
+        }
+      } catch (err) {
+        console.warn('Failed to read current user', err);
+      }
+
+      const payload = {
+        scope: activeTab,
+        room_id: activeTab === 'table' ? currentTable.id : null,
+        profile_id: profileId,
+        author: getChatAuthor(),
+        message: text
+      };
+
+      const { error } = await ctx.supabaseClient
+        .from('chat_messages')
+        .insert(payload);
+
+      if (error) {
+        console.error('Failed to send chat message', error);
+      }
     }
 
     tabButtons.forEach((btn) => {
@@ -1793,10 +1897,10 @@ export const tablePage = {
       console.warn('Chat toggle button not found in DOM');
     }
 
-    chatSend.addEventListener('click', () => {
+    chatSend.addEventListener('click', async () => {
       const value = chatInput.value.trim().slice(0, 50);
       if (!value) return;
-      addMessage(value);
+      await addMessage(value);
       chatInput.value = '';
     });
 
@@ -1806,6 +1910,39 @@ export const tablePage = {
         chatSend.click();
       }
     });
+
+    if (ctx.supabaseClient) {
+      await loadChatMessages('table');
+      await loadChatMessages('lobby');
+
+      chatTableChannel = ctx.supabaseClient
+        .channel(`chat-table-${currentTable.id}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${currentTable.id}` }, (payload) => {
+          if (payload.new?.scope !== 'table') return;
+          tableChatMessages.push(normalizeMessage(payload.new));
+          trimMessages(tableChatMessages);
+          if (activeTab === 'table' && isOpen) {
+            renderChat();
+          } else {
+            chatHeader.classList.add('blink');
+          }
+        })
+        .subscribe();
+
+      chatLobbyChannel = ctx.supabaseClient
+        .channel('chat-lobby')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: 'scope=eq.lobby' }, (payload) => {
+          if (payload.new?.scope !== 'lobby') return;
+          lobbyChatMessages.push(normalizeMessage(payload.new));
+          trimMessages(lobbyChatMessages);
+          if (activeTab === 'lobby' && isOpen) {
+            renderChat();
+          } else {
+            chatHeader.classList.add('blink');
+          }
+        })
+        .subscribe();
+    }
 
     renderChat();
     applyTranslations(chatDrawer, ctx.language);
@@ -1817,6 +1954,12 @@ export const tablePage = {
       clearInterval(readySyncInterval);
       if (realtimeChannel) {
         ctx.supabaseClient.removeChannel(realtimeChannel);
+      }
+      if (chatTableChannel) {
+        ctx.supabaseClient.removeChannel(chatTableChannel);
+      }
+      if (chatLobbyChannel) {
+        ctx.supabaseClient.removeChannel(chatLobbyChannel);
       }
     };
   }
