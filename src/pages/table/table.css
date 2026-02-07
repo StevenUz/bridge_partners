@@ -442,32 +442,23 @@
 /* Turn indicator for active player */
 .player-position-panel.active-turn {
   position: relative;
-  border: 3px solid var(--accent-red);
+  border: 2px solid #ffd86b;
   border-radius: 12px;
-  box-shadow: 0 0 20px rgba(192, 57, 43, 0.6), inset 0 0 12px rgba(192, 57, 43, 0.15);
-  background: rgba(192, 57, 43, 0.08);
-  animation: turnPulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 12px rgba(255, 216, 107, 0.4);
+  background: rgba(255, 216, 107, 0.05);
 }
 
 .player-position-panel.active-turn::after {
-  content: '→';
-  position: absolute;
-  top: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: var(--accent-red);
-  font-weight: bold;
-  font-size: 1.5rem;
-  animation: turnArrowBounce 1.5s ease-in-out infinite;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  content: '';
+  display: none;
 }
 
 @keyframes turnPulse {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(192, 57, 43, 0.6), inset 0 0 12px rgba(192, 57, 43, 0.15);
+    box-shadow: 0 0 12px rgba(255, 216, 107, 0.4);
   }
   50% {
-    box-shadow: 0 0 35px rgba(192, 57, 43, 0.85), inset 0 0 18px rgba(192, 57, 43, 0.25);
+    box-shadow: 0 0 18px rgba(255, 216, 107, 0.6);
   }
 }
 
@@ -484,22 +475,7 @@
 
 /* Turn indicator badge overlay */
 .turn-indicator-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: linear-gradient(135deg, var(--accent-red) 0%, #e74c3c 100%);
-  color: white;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 1.1rem;
-  box-shadow: 0 4px 12px rgba(192, 57, 43, 0.4);
-  animation: turnBadgePulse 1.5s ease-in-out infinite;
-  z-index: 10;
+  display: none;
 }
 
 @keyframes turnBadgePulse {
@@ -616,6 +592,102 @@
 
 .vulnerability-pair.not-vulnerable .vulnerability-status {
   color: #000;
+}
+
+/* Contract pill (header status replacement) */
+.contract-pill {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.28rem 0.7rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  position: relative;
+  margin-top: 0.25rem;
+  min-width: 140px;
+  transition: all 0.3s ease;
+}
+
+.contract-title {
+  color: white;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.contract-value {
+  color: #ffd86b;
+  font-weight: 700;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.contract-tooltip {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: rgba(10, 40, 32, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-width: 240px;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 20;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+.contract-pill:hover .contract-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.contract-tooltip table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #f1f7f3;
+  font-size: 0.78rem;
+}
+
+.contract-tooltip th,
+.contract-tooltip td {
+  text-align: center;
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.contract-tooltip th {
+  font-weight: 700;
+  color: #ffd86b;
+}
+
+.contract-tooltip .bid-chip {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.18);
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.contract-tooltip .bid-chip.call-pass {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.contract-tooltip .bid-chip.call-double,
+.contract-tooltip .bid-chip.call-redouble {
+  background: rgba(220, 53, 69, 0.35);
+}
+
+[data-status-line].d-none {
+  display: none !important;
 }
 
 /* Center vulnerability indicators to header midpoint */
@@ -738,6 +810,16 @@
   gap: 12px;
   background: rgba(15, 93, 70, 0.4);
   border-top: 1px solid #3b8a6a;
+}
+
+/* Dummy hand state */
+.hand-disabled {
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+.dummy-hand .hcp-label {
+  color: #ffd86b;
 }
 
 @keyframes fadeIn {

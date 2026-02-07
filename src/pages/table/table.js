@@ -3,7 +3,7 @@ import './table.css';
 import './table-cards.css';
 import { applyTranslations, languages } from '../../i18n/i18n.js';
 import { dealCards } from './card-dealer.js';
-import { DetermineAuctionResult, CallType } from '../../bridge/auction.js';
+import { DetermineAuctionResult, DetermineContract, DetermineDeclarer, DetermineOpeningLeader, CallType } from '../../bridge/auction.js';
 import { createCardElement } from './card-renderer.js';
 
 const seatOrder = ['south', 'west', 'north', 'east'];
@@ -63,6 +63,7 @@ let playState = {
   declarer: null,        // 'N'/'E'/'S'/'W'
   dummy: null,           // 'N'/'E'/'S'/'W'
   openingLeader: null,   // 'N'/'E'/'S'/'W'
+  firstLeadPlayed: false,
   tricksNS: 0,
   tricksEW: 0,
   inProgress: false
@@ -176,6 +177,17 @@ function loadBiddingState(tableId) {
     return JSON.parse(raw);
   } catch (err) {
     console.warn('Failed to load bidding state', err);
+    return null;
+  }
+}
+
+function loadPlayState(tableId) {
+  try {
+    const raw = localStorage.getItem(`tablePlayState:${tableId}`);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn('Failed to load play state', err);
     return null;
   }
 }
@@ -356,6 +368,30 @@ export const tablePage = {
     const tableId = getTableId();
     currentTable.id = tableId;
 
+    const storedPlayState = loadPlayState(currentTable.id);
+    if (storedPlayState) {
+      playState = { ...playState, ...storedPlayState };
+    }
+
+    const storedDealAtLoad = loadDealState(currentTable.id);
+    if (!storedDealAtLoad) {
+      playState = {
+        contract: null,
+        declarer: null,
+        dummy: null,
+        openingLeader: null,
+        firstLeadPlayed: false,
+        tricksNS: 0,
+        tricksEW: 0,
+        inProgress: false
+      };
+      try { localStorage.removeItem(`tablePlayState:${currentTable.id}`); } catch (e) { /* no-op */ }
+      const statusEl = host.querySelector('[data-status-text]');
+      const hourglassIcon = host.querySelector('[data-hourglass-icon]');
+      if (statusEl) statusEl.textContent = 'Waiting for dealing...';
+      if (hourglassIcon) hourglassIcon.classList.add('hourglass-spinning');
+    }
+
     await loadRoomPlayers(ctx, tableId);
 
     try {
@@ -399,6 +435,99 @@ export const tablePage = {
     const getSeatPlayerName = (seat) => currentTable.players[seat] || positionLabels[seat] || seat;
     const nextSeat = (seat) => seatOrder[(seatOrder.indexOf(seat) + 1) % seatOrder.length];
 
+    const statusLine = host.querySelector('[data-status-line]');
+    const contractPill = host.querySelector('[data-contract-pill]');
+    const contractValueEl = host.querySelector('[data-contract-value]');
+    const contractTooltipEl = host.querySelector('[data-contract-tooltip]');
+
+    const formatContractLabel = (contract) => {
+      if (!contract) return '';
+      const level = contract.level;
+      const strain = contract.strain;
+      const isBg = ctx.language === 'bg';
+      const strainLabel = strain === 'NT'
+        ? (isBg ? 'БК' : 'NT')
+        : suitSymbols[strain] || strain;
+
+      let label = `${level} ${strainLabel}`;
+      if (contract.doubled === 'Doubled') label += ' X';
+      if (contract.doubled === 'Redoubled') label += ' XX';
+      return label;
+    };
+
+    const formatBidForTooltip = (bid) => {
+      if (bid.type === 'bid') return formatCall(bid.call);
+      if (bid.type === 'pass') return ctx.t('pass');
+      if (bid.type === 'double') return ctx.t('double');
+      if (bid.type === 'redouble') return ctx.t('redouble');
+      return '';
+    };
+
+    const buildBiddingTooltipTable = () => {
+      if (!biddingState) return '';
+      const dealerIdx = seatOrder.indexOf(biddingState.dealer);
+      const columnOrder = [];
+      for (let i = 0; i < 4; i++) {
+        columnOrder.push(seatOrder[(dealerIdx + i) % 4]);
+      }
+
+      const bidsBySeat = { north: [], east: [], south: [], west: [] };
+      biddingState.bids.forEach((bid) => {
+        bidsBySeat[bid.seat].push(bid);
+      });
+
+      const maxRows = Math.max(...columnOrder.map(seat => bidsBySeat[seat].length), 1);
+
+      const header = columnOrder
+        .map((seat) => `<th>${getSeatPlayerName(seat)}</th>`)
+        .join('');
+
+      const rows = [];
+      for (let rowIdx = 0; rowIdx < maxRows; rowIdx++) {
+        const cells = columnOrder.map((seat) => {
+          const bid = bidsBySeat[seat][rowIdx];
+          if (!bid) return '<td></td>';
+          const label = formatBidForTooltip(bid);
+          const css = callCssClass(bid.type === 'bid' ? bid.call : bid.type);
+          return `<td><span class="bid-chip ${css}">${label}</span></td>`;
+        }).join('');
+        rows.push(`<tr>${cells}</tr>`);
+      }
+
+      return `
+        <table>
+          <thead><tr>${header}</tr></thead>
+          <tbody>${rows.join('')}</tbody>
+        </table>
+      `;
+    };
+
+    const updateContractDisplay = () => {
+      if (!contractPill || !contractValueEl) return;
+      if (!playState?.contract || !playState?.inProgress || !currentDeal?.hands) {
+        contractPill.classList.add('d-none');
+        if (statusLine) statusLine.classList.remove('d-none');
+        return;
+      }
+      
+      // Get declaring pair names
+      const contractTitleEl = contractPill.querySelector('.contract-title');
+      if (contractTitleEl && playState?.declarer) {
+        const declarerSeat = playState.declarer === 'N' || playState.declarer === 'S' ? 'NS' : 'EW';
+        const names = declarerSeat === 'NS' 
+          ? `${getSeatPlayerName('north')}-${getSeatPlayerName('south')}`
+          : `${getSeatPlayerName('east')}-${getSeatPlayerName('west')}`;
+        contractTitleEl.textContent = names;
+      }
+      
+      contractValueEl.textContent = formatContractLabel(playState.contract);
+      if (contractTooltipEl) {
+        contractTooltipEl.innerHTML = buildBiddingTooltipTable();
+      }
+      contractPill.classList.remove('d-none');
+      if (statusLine) statusLine.classList.add('d-none');
+    };
+
     function formatCall(call) {
       if (call === 'pass') return ctx.t('pass');
       if (call === 'double') return ctx.t('double');
@@ -428,6 +557,7 @@ export const tablePage = {
         localStorage.removeItem(`tableDealState:${currentTable.id}`);
         localStorage.removeItem(`tableBiddingState:${currentTable.id}`);
         localStorage.removeItem(`tableVulnerability:${currentTable.id}`);
+        localStorage.removeItem(`tablePlayState:${currentTable.id}`);
       } catch (err) {
         console.warn('Failed to clear table state', err);
       }
@@ -449,6 +579,21 @@ export const tablePage = {
         playerReadyState[seat] = false;
       });
       persistReadyState(currentTable.id, playerReadyState);
+
+      // Reset header UI
+      const statusEl = host.querySelector('[data-status-text]');
+      const hourglassIcon = host.querySelector('[data-hourglass-icon]');
+      if (statusEl) statusEl.textContent = 'Waiting for dealing...';
+      if (hourglassIcon) hourglassIcon.classList.add('hourglass-spinning');
+      if (statusLine) statusLine.classList.remove('d-none');
+      if (contractPill) contractPill.classList.add('d-none');
+
+      // Clear turn indicators and contract pill
+      updateContractDisplay();
+      updatePlayTurnIndicator();
+
+      // Sync cleared play state to database
+      syncPlayStateToDatabase();
 
       window.location.reload();
     };
@@ -547,6 +692,188 @@ export const tablePage = {
       { slot: 'west',  seat: leftSeat },
       { slot: 'east',  seat: rightSeat }
     ];
+
+    const seatCodeMap = { N: 'north', E: 'east', S: 'south', W: 'west' };
+    const getDummySeat = () => (playState?.dummy ? seatCodeMap[playState.dummy] : null);
+    const shouldRevealDummy = (seatName) => playState?.inProgress && playState?.firstLeadPlayed && getDummySeat() === seatName;
+    const shouldShowHcp = (seatName) => {
+      const dummySeat = getDummySeat();
+      if (viewerSeat === seatName) return true;
+      if (playState?.inProgress && playState?.firstLeadPlayed && dummySeat === seatName && viewerSeat !== dummySeat) return true;
+      return false;
+    };
+    const getOpeningLeaderSeat = () => (playState?.openingLeader ? seatCodeMap[playState.openingLeader] : null);
+
+    const updatePlayTurnIndicator = () => {
+      slotMapping.forEach(({ slot }) => {
+        const panel = visualPanels[slot];
+        if (panel) {
+          panel.classList.remove('active-turn');
+          const badge = panel.querySelector('.turn-indicator-badge');
+          if (badge) badge.remove();
+        }
+      });
+
+      if (!playState?.inProgress) return;
+      const openingLeaderSeat = getOpeningLeaderSeat();
+      if (!openingLeaderSeat) return;
+      const mapping = slotMapping.find((m) => m.seat === openingLeaderSeat);
+      if (!mapping) return;
+      const panel = visualPanels[mapping.slot];
+      if (!panel) return;
+      panel.classList.add('active-turn');
+      const badge = document.createElement('div');
+      badge.className = 'turn-indicator-badge';
+      badge.innerHTML = '→';
+      badge.title = `${getSeatPlayerName(openingLeaderSeat)}'s turn`;
+      panel.appendChild(badge);
+    };
+
+    const renderHandsForPlayPhase = () => {
+      if (!currentDeal?.hands) return;
+      const isRedBack = currentDeal.isEvenDeal;
+
+      slotMapping.forEach(({ slot, seat }) => {
+        const container = host.querySelector(`[data-cards-${slot}]`);
+        if (!container || !seat) return;
+        container.innerHTML = '';
+
+        const nameLabel = document.createElement('div');
+        nameLabel.className = `hcp-label hcp-${slot}`;
+        if (['west', 'east'].includes(slot)) {
+          nameLabel.style.textAlign = 'center';
+          if (shouldShowHcp(seat)) {
+            nameLabel.innerHTML = `${positionLabels[seat]}<br>${getSeatPlayerName(seat)}: ${hcpScores[seat]}`;
+          } else {
+            nameLabel.innerHTML = `${positionLabels[seat]}<br>${getSeatPlayerName(seat)}`;
+          }
+        } else {
+          if (shouldShowHcp(seat)) {
+            nameLabel.innerHTML = `${positionLabels[seat]} – ${getSeatPlayerName(seat)}: ${hcpScores[seat]}`;
+          } else {
+            nameLabel.innerHTML = `${positionLabels[seat]} – ${getSeatPlayerName(seat)}`;
+          }
+        }
+        container.appendChild(nameLabel);
+
+        const hand = createCardDisplay(
+          currentDeal.hands[seat],
+          slot,
+          viewerSeat === seat || shouldRevealDummy(seat),
+          isRedBack
+        );
+        container.appendChild(hand);
+
+        container.classList.toggle('dummy-hand', shouldRevealDummy(seat));
+        container.classList.toggle('hand-disabled', viewerSeat === seat && shouldRevealDummy(seat));
+      });
+
+      const openingLeaderSeat = getOpeningLeaderSeat();
+      if (playState?.inProgress && !playState?.firstLeadPlayed && viewerSeat && viewerSeat === openingLeaderSeat) {
+        const leaderMapping = slotMapping.find((m) => m.seat === openingLeaderSeat);
+        const leaderContainer = leaderMapping
+          ? host.querySelector(`[data-cards-${leaderMapping.slot}]`)
+          : null;
+
+        if (leaderContainer) {
+          leaderContainer.addEventListener('click', (event) => {
+            const card = event.target.closest('.playing-card');
+            if (!card) return;
+            if (playState.firstLeadPlayed) return;
+
+            playState.firstLeadPlayed = true;
+            try {
+              localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState));
+            } catch (err) {
+              console.warn('Failed to persist playState', err);
+            }
+
+            renderHandsForPlayPhase();
+          }, { once: true });
+        }
+      }
+    };
+
+    // Sync playState to database
+    const syncPlayStateToDatabase = async () => {
+      if (!supabaseClient || !currentTable?.id || !playState) return;
+      
+      try {
+        const updateData = {
+          contract_level: playState.contract?.level || null,
+          contract_strain: playState.contract?.strain || null,
+          contract_doubled: playState.contract?.doubled || 'None',
+          declarer_seat: playState.declarer || null,
+          dummy_seat: playState.dummy || null,
+          opening_leader_seat: playState.openingLeader || null,
+          current_deal_number: currentDeal?.dealNumber || 1,
+          play_in_progress: playState.inProgress || false,
+          first_lead_played: playState.firstLeadPlayed || false,
+          tricks_ns: playState.tricksNS || 0,
+          tricks_ew: playState.tricksEW || 0,
+          status: playState.inProgress ? 'playing' : 'waiting'
+        };
+
+        const { error } = await supabaseClient
+          .from('rooms')
+          .update(updateData)
+          .eq('id', currentTable.id);
+
+        if (error) {
+          console.warn('Failed to sync playState to database:', error);
+        } else {
+          console.log('✓ playState synced to database');
+        }
+      } catch (err) {
+        console.warn('Error syncing playState:', err);
+      }
+    };
+
+    const applyContractResult = (contract, declarer, dummy, openingLeader) => {
+      if (!contract || !declarer || !dummy || !openingLeader) return;
+      playState.contract = contract;
+      playState.declarer = declarer;
+      playState.dummy = dummy;
+      playState.openingLeader = openingLeader;
+      playState.firstLeadPlayed = false;
+      playState.tricksNS = 0;
+      playState.tricksEW = 0;
+      playState.inProgress = true;
+
+      updateVulnerabilityWithContract(host, ctx, currentDeal.dealNumber, playState);
+      try { localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState)); } catch (e) { console.warn('Failed to persist playState', e); }
+      
+      // Sync to database
+      syncPlayStateToDatabase();
+      
+      renderHandsForPlayPhase();
+      updateContractDisplay();
+      updatePlayTurnIndicator();
+    };
+
+    const resolveContractFallback = () => {
+      if (!biddingState?.bids?.length) return null;
+      const calls = biddingState.bids.map(b => {
+        if (b.type === 'bid') {
+          const level = Number(b.call[0]);
+          const strain = b.call.slice(1);
+          return { type: CallType.BID, level, strain, seat: b.seat.charAt(0).toUpperCase() };
+        } else if (b.type === 'pass') {
+          return { type: CallType.PASS, seat: b.seat.charAt(0).toUpperCase() };
+        } else if (b.type === 'double') {
+          return { type: CallType.DOUBLE, seat: b.seat.charAt(0).toUpperCase() };
+        } else if (b.type === 'redouble') {
+          return { type: CallType.REDOUBLE, seat: b.seat.charAt(0).toUpperCase() };
+        }
+      });
+
+      const contract = DetermineContract(calls);
+      if (!contract) return null;
+      const declarer = DetermineDeclarer(calls, contract);
+      const dummy = declarer ? (declarer === 'N' ? 'S' : declarer === 'S' ? 'N' : declarer === 'E' ? 'W' : 'E') : null;
+      const openingLeader = declarer ? DetermineOpeningLeader(declarer) : null;
+      return { contract, declarer, dummy, openingLeader };
+    };
 
     // Define gameArea early so renderDealAndBidding can use it
     const gameArea = host.querySelector('[data-game-area]');
@@ -660,14 +987,14 @@ export const tablePage = {
         if (['west', 'east'].includes(slotName)) {
           // Side players: text on two lines, centered
           nameLabel.style.textAlign = 'center';
-          if (viewerSeat === seatName) {
+          if (shouldShowHcp(seatName)) {
             nameLabel.innerHTML = `${positionLabels[seatName]}<br>${getSeatPlayerName(seatName)}: ${hcpScores[seatName]}`;
           } else {
             nameLabel.innerHTML = `${positionLabels[seatName]}<br>${getSeatPlayerName(seatName)}`;
           }
         } else {
           // North and South: text on one line
-          if (viewerSeat === seatName) {
+          if (shouldShowHcp(seatName)) {
             nameLabel.innerHTML = `${positionLabels[seatName]} – ${getSeatPlayerName(seatName)}: ${hcpScores[seatName]}`;
           } else {
             nameLabel.innerHTML = `${positionLabels[seatName]} – ${getSeatPlayerName(seatName)}`;
@@ -679,16 +1006,23 @@ export const tablePage = {
         const hand = createCardDisplay(
           currentDeal.hands[seatName],
           slotName,
-          viewerSeat === seatName, // Show face-up only for viewer's seat
+          viewerSeat === seatName || shouldRevealDummy(seatName),
           isRedBack
         );
         container.appendChild(hand);
+
+        container.classList.toggle('dummy-hand', shouldRevealDummy(seatName));
+        container.classList.toggle('hand-disabled', viewerSeat === seatName && shouldRevealDummy(seatName));
       };
 
       renderHandForSlot('north', topSeat);
       renderHandForSlot('south', bottomSeat);
       renderHandForSlot('west', leftSeat);
       renderHandForSlot('east', rightSeat);
+
+      if (playState?.inProgress) {
+        renderHandsForPlayPhase();
+      }
 
       // Always render bidding panel (create default state if missing)
       const dealerSeat = seatOrder[(currentDeal.dealNumber - 1) % seatOrder.length];
@@ -808,12 +1142,15 @@ export const tablePage = {
         }
 
         function checkAuctionEndAndTransition() {
+          console.log('[checkAuctionEndAndTransition] called, biddingState.ended=', biddingState.ended);
           if (!biddingState.ended) return;
           // Dealer seat in auction.js is 'N'/'E'/'S'/'W'
           const dealerMap = { north: 'N', east: 'E', south: 'S', west: 'W' };
           const dealerSeat = dealerMap[biddingState.dealer];
           const calls = toAuctionCalls(biddingState.bids);
+          console.log('[checkAuctionEndAndTransition] dealerSeat=', dealerSeat, 'calls=', calls);
           const result = DetermineAuctionResult(calls, dealerSeat);
+          console.log('[checkAuctionEndAndTransition] result=', result);
           if (result.result === 'PassedOut') {
             // Show passed out message, reset for next deal
             const statusEl = host.querySelector('[data-status-text]');
@@ -825,6 +1162,7 @@ export const tablePage = {
             playState.declarer = result.declarer;
             playState.dummy = result.dummy;
             playState.openingLeader = result.openingLeader;
+            playState.firstLeadPlayed = false;
             playState.tricksNS = 0;
             playState.tricksEW = 0;
             playState.inProgress = true;
@@ -836,6 +1174,10 @@ export const tablePage = {
 
             // Update vulnerability indicators with contract and tricks
             updateVulnerabilityWithContract(host, ctx, currentDeal.dealNumber, playState);
+            try { localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState)); } catch (e) { console.warn('Failed to persist playState', e); }
+            renderHandsForPlayPhase();
+            updateContractDisplay();
+            updatePlayTurnIndicator();
           }
         }
 
@@ -976,12 +1318,11 @@ export const tablePage = {
           updateActionIndicator();
 
           // Check if bidding ended and update status
+          console.log('[handleCall] About to check if bidding ended. biddingState.ended=', biddingState.ended);
           if (biddingState.ended) {
-            dealBtn.disabled = false;
-            dealBtn.classList.add('dealer-ready');
-            const hourglassIcon = host.querySelector('[data-hourglass-icon]');
-            if (hourglassIcon) hourglassIcon.classList.remove('hourglass-spinning');
+            console.log('[handleCall] Bidding has ended! Calling checkAuctionEndAndTransition...');
             checkAuctionEndAndTransition();
+            console.log('[handleCall] checkAuctionEndAndTransition completed');
           }
         };
 
@@ -1012,7 +1353,6 @@ export const tablePage = {
           btn.setAttribute('data-call', key);
           btn.addEventListener('click', () => {
             handleCall(key);
-            // Check if bidding has ended and update UI
             if (biddingState.ended) {
               const statusEl = host.querySelector('[data-status-text]');
               const hourglassIcon = host.querySelector('[data-hourglass-icon]');
@@ -1172,6 +1512,17 @@ export const tablePage = {
           updateVulnerabilityIndicators(host, ctx, vulnState.dealNumber);
         }
       }
+      if (event.key === `tablePlayState:${currentTable.id}`) {
+        const newPlayState = loadPlayState(currentTable.id);
+        if (newPlayState) {
+          playState = { ...playState, ...newPlayState };
+          if (playState?.inProgress) {
+            renderHandsForPlayPhase();
+            updateContractDisplay();
+            updatePlayTurnIndicator();
+          }
+        }
+      }
     };
     window.addEventListener('storage', storageHandler);
 
@@ -1194,6 +1545,8 @@ export const tablePage = {
 
     // Initial render if deal already exists
     renderDealAndBidding();
+    updateContractDisplay();
+    // updatePlayTurnIndicator will be called after contract is determined
 
     // Back button
     const backBtn = host.querySelector('[data-action="back-lobby"]');
@@ -1611,24 +1964,12 @@ export const tablePage = {
               if (statusEl) statusEl.textContent = 'Passed Out – No play.';
               playState.inProgress = false;
             } else if (result.result === 'Contract') {
-              playState.contract = result.contract;
-              playState.declarer = result.declarer;
-              playState.dummy = result.dummy;
-              playState.openingLeader = result.openingLeader;
-              playState.tricksNS = 0;
-              playState.tricksEW = 0;
-              playState.inProgress = true;
-
-              const statusEl = host.querySelector('[data-status-text]');
-              if (statusEl) {
-                statusEl.textContent = `Contract: ${result.contract.level}${result.contract.strain}${result.contract.doubled !== 'None' ? (result.contract.doubled === 'Doubled' ? 'X' : 'XX') : ''} by ${result.declarer} (Dummy: ${result.dummy}, Lead: ${result.openingLeader})`;
+              applyContractResult(result.contract, result.declarer, result.dummy, result.openingLeader);
+            } else if (biddingState.ended) {
+              const fallback = resolveContractFallback();
+              if (fallback) {
+                applyContractResult(fallback.contract, fallback.declarer, fallback.dummy, fallback.openingLeader);
               }
-
-              // Persist playState so other tabs/observers can pick it up
-              try { localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState)); } catch (e) { console.warn('Failed to persist playState', e); }
-              // Update vulnerability indicators with contract and tricks
-              console.log('[play] storing playState and updating vulnerability', playState);
-              updateVulnerabilityWithContract(host, ctx, currentDeal.dealNumber, playState);
             }
           }
         };
