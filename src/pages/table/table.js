@@ -36,24 +36,18 @@ function isHigherBid(candidate, lastBid) {
 const currentTable = {
   id: 1,
   players: {
-    north: 'Marco',
-    south: 'Elena',
-    west: 'Ivan',
-    east: 'Maria'
+    north: null,
+    south: null,
+    west: null,
+    east: null
   },
-  observers: ['Peter', 'Maya']
+  observers: []
 };
 
 // Chat state
-const lobbyChatMessages = [
-  { author: 'Elena', text: 'Lobby chat is visible to everyone.' },
-  { author: 'Marco', text: 'Ready to start soon.' }
-];
+const lobbyChatMessages = [];
 
-const tableChatMessages = [
-  { author: 'Ivan', text: 'Good luck!' },
-  { author: 'Maria', text: 'Let\'s play fair.' }
-];
+const tableChatMessages = [];
 
 const MAX_CHAT_MESSAGES = 15;
 
@@ -198,6 +192,14 @@ function getPlayerPosition() {
   return params.get('position') || 'north';
 }
 
+function getTableId() {
+  const params = new URLSearchParams(window.location.search);
+  const fromUrl = params.get('id');
+  if (fromUrl) return fromUrl;
+  const currentPlayer = getCurrentPlayer();
+  return currentPlayer?.tableId || '1';
+}
+
 function getCurrentPlayer() {
   try {
     const playerData = localStorage.getItem('currentPlayer');
@@ -208,6 +210,26 @@ function getCurrentPlayer() {
     console.warn('Failed to read current player', err);
   }
   return null;
+}
+
+async function loadRoomPlayers(ctx, roomId) {
+  if (!ctx?.supabaseClient || !roomId) return;
+
+  const { data, error } = await ctx.supabaseClient
+    .from('room_seats')
+    .select('seat_position, profile:profiles(id, username, display_name)')
+    .eq('room_id', roomId);
+
+  if (error) {
+    console.error('Failed to load room seats', error);
+    return;
+  }
+
+  currentTable.players = { north: null, south: null, east: null, west: null };
+  (data || []).forEach((seat) => {
+    const label = seat.profile?.username || seat.profile?.display_name || null;
+    currentTable.players[seat.seat_position] = label;
+  });
 }
 
 function updateVulnerabilityIndicators(host, ctx, dealNum) {
@@ -323,15 +345,30 @@ function createCardDisplay(hand, position, faceVisible, isRedBack) {
 export const tablePage = {
   path: '/table',
   name: 'table',
-  render(container, ctx) {
+  async render(container, ctx) {
     const host = document.createElement('section');
     host.innerHTML = template;
+
+    const tableId = getTableId();
+    currentTable.id = tableId;
+
+    await loadRoomPlayers(ctx, tableId);
 
     try {
       // Update current table with joined player info
       const currentPlayer = getCurrentPlayer();
+      let currentUser = null;
+      try {
+        currentUser = JSON.parse(localStorage.getItem('currentUser'));
+      } catch (err) {
+        console.warn('Failed to read current user', err);
+      }
+
       if (currentPlayer) {
-        const playerName = `Player ${currentPlayer.seat.charAt(0).toUpperCase()}`;
+        const playerName = currentPlayer.name
+          || currentUser?.username
+          || currentUser?.display_name
+          || `Player ${currentPlayer.seat.charAt(0).toUpperCase()}`;
         currentTable.players[currentPlayer.seat] = playerName;
         console.log(`✓ Joined table ${currentPlayer.tableId} as ${currentPlayer.seat}: ${playerName}`);
       } else {
@@ -354,7 +391,8 @@ export const tablePage = {
 
     const suitSymbols = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' };
 
-    const getSeatName = (seat) => currentTable.players[seat] || seat;
+    const getSeatName = (seat) => currentTable.players[seat] || positionLabels[seat] || seat;
+    const getSeatPlayerName = (seat) => currentTable.players[seat] || positionLabels[seat] || seat;
     const nextSeat = (seat) => seatOrder[(seatOrder.indexOf(seat) + 1) % seatOrder.length];
 
     function formatCall(call) {
@@ -378,6 +416,78 @@ export const tablePage = {
     }
 
     applyTranslations(host, ctx.language);
+
+    const resetBtn = host.querySelector('[data-action="reset-game"]');
+    const resetGameState = () => {
+      try {
+        localStorage.removeItem(`tableReadyState:${currentTable.id}`);
+        localStorage.removeItem(`tableDealState:${currentTable.id}`);
+        localStorage.removeItem(`tableBiddingState:${currentTable.id}`);
+        localStorage.removeItem(`tableVulnerability:${currentTable.id}`);
+      } catch (err) {
+        console.warn('Failed to clear table state', err);
+      }
+
+      currentDeal = null;
+      biddingState = null;
+      playState = {
+        contract: null,
+        declarer: null,
+        dummy: null,
+        openingLeader: null,
+        tricksNS: 0,
+        tricksEW: 0,
+        inProgress: false
+      };
+      hcpScores = { north: 0, east: 0, south: 0, west: 0 };
+      dealNumber = 1;
+      ['north', 'south', 'east', 'west'].forEach((seat) => {
+        playerReadyState[seat] = false;
+      });
+      persistReadyState(currentTable.id, playerReadyState);
+
+      window.location.reload();
+    };
+
+    const showResetModal = () => {
+      const modal = document.createElement('div');
+      modal.className = 'reset-modal-overlay';
+      modal.innerHTML = `
+        <div class="reset-modal">
+          <div class="reset-modal-header">
+            <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+            <h5 class="mb-0">${ctx.t('resetGameConfirmTitle')}</h5>
+          </div>
+          <div class="reset-modal-body">
+            <p>${ctx.t('resetGameConfirm')}</p>
+          </div>
+          <div class="reset-modal-footer">
+            <button class="btn btn-outline-light" data-reset-cancel>${ctx.t('resetGameConfirmNo')}</button>
+            <button class="btn btn-danger" data-reset-confirm>${ctx.t('resetGameConfirmYes')}</button>
+          </div>
+        </div>
+      `;
+
+      host.appendChild(modal);
+
+      const closeModal = () => modal.remove();
+      modal.querySelector('[data-reset-cancel]').addEventListener('click', closeModal);
+      modal.addEventListener('click', (event) => {
+        if (event.target === modal) closeModal();
+      });
+      modal.querySelector('[data-reset-confirm]').addEventListener('click', () => {
+        closeModal();
+        resetGameState();
+      });
+    };
+
+    if (resetBtn) {
+      const resetLabel = ctx.t('resetGame');
+      resetBtn.title = resetLabel;
+      resetBtn.setAttribute('aria-label', resetLabel);
+
+      resetBtn.addEventListener('click', showResetModal);
+    }
 
     // Initialize vulnerability indicators for current state
     const storedDeal = loadDealState(currentTable.id);
@@ -547,16 +657,16 @@ export const tablePage = {
           // Side players: text on two lines, centered
           nameLabel.style.textAlign = 'center';
           if (viewerSeat === seatName) {
-            nameLabel.innerHTML = `${positionLabels[seatName]}<br>${currentTable.players[seatName]}: ${hcpScores[seatName]}`;
+            nameLabel.innerHTML = `${positionLabels[seatName]}<br>${getSeatPlayerName(seatName)}: ${hcpScores[seatName]}`;
           } else {
-            nameLabel.innerHTML = `${positionLabels[seatName]}<br>${currentTable.players[seatName]}`;
+            nameLabel.innerHTML = `${positionLabels[seatName]}<br>${getSeatPlayerName(seatName)}`;
           }
         } else {
           // North and South: text on one line
           if (viewerSeat === seatName) {
-            nameLabel.innerHTML = `${positionLabels[seatName]} – ${currentTable.players[seatName]}: ${hcpScores[seatName]}`;
+            nameLabel.innerHTML = `${positionLabels[seatName]} – ${getSeatPlayerName(seatName)}: ${hcpScores[seatName]}`;
           } else {
-            nameLabel.innerHTML = `${positionLabels[seatName]} – ${currentTable.players[seatName]}`;
+            nameLabel.innerHTML = `${positionLabels[seatName]} – ${getSeatPlayerName(seatName)}`;
           }
         }
         container.appendChild(nameLabel);
@@ -614,7 +724,7 @@ export const tablePage = {
 
         const suitSymbols = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' };
 
-        const getSeatName = (seat) => currentTable.players[seat] || seat;
+        const getSeatName = (seat) => currentTable.players[seat] || positionLabels[seat] || seat;
         const nextSeat = (seat) => seatOrder[(seatOrder.indexOf(seat) + 1) % seatOrder.length];
 
         function formatCall(call) {
@@ -821,7 +931,7 @@ export const tablePage = {
                 const badge = document.createElement('div');
                 badge.className = 'turn-indicator-badge';
                 badge.innerHTML = '→';
-                badge.title = `${currentTable.players[biddingState.currentSeat]}'s turn`;
+                badge.title = `${getSeatPlayerName(biddingState.currentSeat)}'s turn`;
                 panel.appendChild(badge);
               }
             }
@@ -933,7 +1043,7 @@ export const tablePage = {
       const panel = visualPanels[slot];
       if (!panel || !seat) return;
       panel.innerHTML = '';
-      const playerName = currentTable.players[seat];
+      const playerName = currentTable.players[seat] || ctx.t('seatOpen');
       const btn = document.createElement('button');
       btn.className = 'player-name-button';
       
@@ -979,6 +1089,25 @@ export const tablePage = {
       readyContainer.appendChild(toggle);
       panel.appendChild(readyContainer);
     });
+
+    const updateSeatLabels = () => {
+      slotMapping.forEach(({ slot, seat }) => {
+        const panel = visualPanels[slot];
+        if (!panel || !seat) return;
+        const btn = panel.querySelector('.player-name-button');
+        if (!btn) return;
+        const name = getSeatPlayerName(seat);
+        if (['west', 'east'].includes(slot)) {
+          btn.innerHTML = `${positionLabels[seat]}<br>${name}`;
+        } else {
+          btn.innerHTML = `${positionLabels[seat]} – ${name}`;
+        }
+      });
+
+      const storedDeal = loadDealState(currentTable.id);
+      const currentDealNumber = storedDeal?.dealNumber || dealNumber;
+      updateVulnerabilityIndicators(host, ctx, currentDealNumber);
+    };
     
     // Check if all players are ready
     const checkAllPlayersReady = () => {
@@ -1003,6 +1132,7 @@ export const tablePage = {
     
     // Initialize check
     syncReadyUI();
+    updateSeatLabels();
 
     const getDealRaw = () => localStorage.getItem(`tableDealState:${currentTable.id}`);
     const getBiddingRaw = () => localStorage.getItem(`tableBiddingState:${currentTable.id}`);
@@ -1041,6 +1171,17 @@ export const tablePage = {
     };
     window.addEventListener('storage', storageHandler);
 
+    let realtimeChannel = null;
+    if (ctx.supabaseClient && currentTable.id) {
+      realtimeChannel = ctx.supabaseClient
+        .channel(`table-seats-${currentTable.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'room_seats', filter: `room_id=eq.${currentTable.id}` }, async () => {
+          await loadRoomPlayers(ctx, currentTable.id);
+          updateSeatLabels();
+        })
+        .subscribe();
+    }
+
     // Fallback polling to keep state fresh if storage events are missed
     const readySyncInterval = setInterval(() => {
       syncReadyUI();
@@ -1061,6 +1202,14 @@ export const tablePage = {
           // Free up the seat in the table
           const tableId = currentPlayer.tableId;
           currentTable.players[currentPlayer.seat] = null;
+
+          if (ctx.supabaseClient && tableId) {
+            ctx.supabaseClient
+              .from('room_seats')
+              .update({ profile_id: null, seated_at: null })
+              .eq('room_id', tableId)
+              .eq('seat_position', currentPlayer.seat);
+          }
           
           // Clear all table state for this table (deal, bidding, ready, vulnerability)
           localStorage.removeItem(`tableDealState:${tableId}`);
@@ -1175,7 +1324,9 @@ export const tablePage = {
         northContainer.innerHTML = '';
         const northHcpLabel = document.createElement('div');
         northHcpLabel.className = 'hcp-label hcp-north';
-        northHcpLabel.innerHTML = `${currentTable.players[topSeat]}: ${hcpScores[topSeat]}`;
+        northHcpLabel.innerHTML = viewerSeat === topSeat
+          ? `${getSeatPlayerName(topSeat)}: ${hcpScores[topSeat]}`
+          : `${getSeatPlayerName(topSeat)}`;
         northContainer.appendChild(northHcpLabel);
         const northHand = createCardDisplay(
           currentDeal.hands[topSeat],
@@ -1191,7 +1342,9 @@ export const tablePage = {
         southContainer.innerHTML = '';
         const southHcpLabel = document.createElement('div');
         southHcpLabel.className = 'hcp-label hcp-south';
-        southHcpLabel.innerHTML = `${currentTable.players[bottomSeat]}: ${hcpScores[bottomSeat]}`;
+        southHcpLabel.innerHTML = viewerSeat === bottomSeat
+          ? `${getSeatPlayerName(bottomSeat)}: ${hcpScores[bottomSeat]}`
+          : `${getSeatPlayerName(bottomSeat)}`;
         southContainer.appendChild(southHcpLabel);
         const southHand = createCardDisplay(
           currentDeal.hands[bottomSeat],
@@ -1207,7 +1360,9 @@ export const tablePage = {
         westContainer.innerHTML = '';
         const westHcpLabel = document.createElement('div');
         westHcpLabel.className = 'hcp-label hcp-west';
-        westHcpLabel.innerHTML = `${currentTable.players[leftSeat]}: ${hcpScores[leftSeat]}`;
+        westHcpLabel.innerHTML = viewerSeat === leftSeat
+          ? `${getSeatPlayerName(leftSeat)}: ${hcpScores[leftSeat]}`
+          : `${getSeatPlayerName(leftSeat)}`;
         westContainer.appendChild(westHcpLabel);
         const westHand = createCardDisplay(
           currentDeal.hands[leftSeat],
@@ -1223,7 +1378,9 @@ export const tablePage = {
         eastContainer.innerHTML = '';
         const eastHcpLabel = document.createElement('div');
         eastHcpLabel.className = 'hcp-label hcp-east';
-        eastHcpLabel.innerHTML = `${currentTable.players[rightSeat]}: ${hcpScores[rightSeat]}`;
+        eastHcpLabel.innerHTML = viewerSeat === rightSeat
+          ? `${getSeatPlayerName(rightSeat)}: ${hcpScores[rightSeat]}`
+          : `${getSeatPlayerName(rightSeat)}`;
         eastContainer.appendChild(eastHcpLabel);
         const eastHand = createCardDisplay(
           currentDeal.hands[rightSeat],
@@ -1654,5 +1811,13 @@ export const tablePage = {
     applyTranslations(chatDrawer, ctx.language);
 
     container.append(host);
+
+    return () => {
+      window.removeEventListener('storage', storageHandler);
+      clearInterval(readySyncInterval);
+      if (realtimeChannel) {
+        ctx.supabaseClient.removeChannel(realtimeChannel);
+      }
+    };
   }
 };

@@ -98,19 +98,19 @@ async function fetchPartnerships() {
     const enriched = await Promise.all((partnerships || []).map(async (p) => {
       const { data: p1 } = await supabaseClient
         .from('profiles')
-        .select('display_name')
+        .select('username, display_name')
         .eq('id', p.player_id)
         .single();
       
       const { data: p2 } = await supabaseClient
         .from('profiles')
-        .select('display_name')
+        .select('username, display_name')
         .eq('id', p.partner_id)
         .single();
 
       return {
-        player1: p1?.display_name || 'Unknown',
-        player2: p2?.display_name || 'Unknown',
+        player1: getProfileLabel(p1),
+        player2: getProfileLabel(p2),
         boards_together: p.boards_together,
         wins_together: p.wins_together,
         win_rate: p.boards_together > 0 
@@ -133,7 +133,7 @@ async function fetchAllPlayerStats() {
   try {
     const { data, error } = await supabaseClient
       .from('player_statistics')
-      .select('*, profiles!player_statistics_player_id_fkey(display_name)')
+      .select('*, profiles!player_statistics_player_id_fkey(username, display_name)')
       .order('boards_completed', { ascending: false });
 
     if (error) throw error;
@@ -205,7 +205,7 @@ function renderParticipationTable(root, stats, language) {
   );
 
   tbody.innerHTML = sorted.map(s => {
-    const playerName = escapeHtml(s.profiles?.display_name || 'Unknown');
+    const playerName = escapeHtml(getProfileLabel(s.profiles));
     const playerId = s.player_id;
     
     return `
@@ -299,7 +299,7 @@ function createPlayerTooltip(stat, language) {
     <table class="tooltip-table">
       <tr>
         <th>${t(language, 'playerCol')}</th>
-        <td colspan="2">${escapeHtml(stat.profiles?.display_name || 'Unknown')}</td>
+        <td colspan="2">${escapeHtml(getProfileLabel(stat.profiles))}</td>
       </tr>
       <tr>
         <th>${t(language, 'totalGamesCol')}</th>
@@ -423,7 +423,7 @@ function renderContractsTable(root, stats) {
     
     return `
       <tr>
-        <td>${escapeHtml(s.profiles?.display_name || 'Unknown')}</td>
+        <td>${escapeHtml(getProfileLabel(s.profiles))}</td>
         <td>${s.made}</td>
         <td>${s.failed}</td>
         <td>${s.defeated}</td>
@@ -467,7 +467,7 @@ function renderScoringTable(root, stats) {
     
     return `
       <tr>
-        <td>${escapeHtml(s.profiles?.display_name || 'Unknown')}</td>
+        <td>${escapeHtml(getProfileLabel(s.profiles))}</td>
         <td class="${scoreClass}">${s.total_score || 0}</td>
         <td>${s.small_slams_bid || 0}</td>
         <td>${s.grand_slams_bid || 0}</td>
@@ -499,4 +499,9 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+function getProfileLabel(profile) {
+  if (!profile) return 'Unknown';
+  return profile.username || profile.display_name || 'Unknown';
 }

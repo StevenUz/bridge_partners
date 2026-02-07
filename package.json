@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host --port 5000",
     "build": "vite build",
-    "preview": "vite preview --host --port 5000"
+    "preview": "vite preview --host --port 5000",
+    "supabase:pull": "powershell -ExecutionPolicy Bypass -File ./scripts/pull-migrations.ps1"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.94.1",

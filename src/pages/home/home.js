@@ -95,6 +95,22 @@ export const homePage = {
         }
 
         // Successful registration
+        try {
+          const { data: profileData } = await ctx.supabaseClient
+            .from('profiles')
+            .select('id, username, display_name')
+            .ilike('username', displayName)
+            .limit(1);
+
+          const profile = profileData && profileData.length > 0
+            ? profileData[0]
+            : { username: displayName, display_name: displayName };
+
+          localStorage.setItem('currentUser', JSON.stringify(profile));
+        } catch (err) {
+          console.warn('Failed to persist current user', err);
+        }
+
         goLobby();
       } catch (error) {
         showRegisterError(error.message || 'Registration error');
@@ -142,6 +158,17 @@ export const homePage = {
         }
 
         // Successful login
+        const profile = data[0];
+        try {
+          localStorage.setItem('currentUser', JSON.stringify({
+            id: profile.id,
+            username: profile.username,
+            display_name: profile.display_name
+          }));
+        } catch (err) {
+          console.warn('Failed to persist current user', err);
+        }
+
         goLobby();
       } catch (error) {
         showLoginError(error.message || 'Login error');
