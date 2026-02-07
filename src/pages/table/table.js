@@ -63,6 +63,9 @@ let playState = {
   declarer: null,        // 'N'/'E'/'S'/'W'
   dummy: null,           // 'N'/'E'/'S'/'W'
   openingLeader: null,   // 'N'/'E'/'S'/'W'
+  currentTurn: null,     // 'N'/'E'/'S'/'W'
+  currentTrick: [],      // [{ seat: 'N', card: { rank, suit } }]
+  playedCounts: { north: 0, east: 0, south: 0, west: 0 },
   firstLeadPlayed: false,
   tricksNS: 0,
   tricksEW: 0,
@@ -352,6 +355,8 @@ function createCardDisplay(hand, position, faceVisible, isRedBack) {
 
   hand.forEach(card => {
     const cardEl = createCardElement(card, faceVisible, isRedBack);
+    if (card?.rank) cardEl.dataset.rank = card.rank;
+    if (card?.suit) cardEl.dataset.suit = card.suit;
     container.appendChild(cardEl);
   });
 
@@ -367,10 +372,20 @@ export const tablePage = {
 
     const tableId = getTableId();
     currentTable.id = tableId;
+    
+    // Declare channels at top level for access in functions
+    let realtimeChannel = null;
+    let roomStateChannel = null;
 
     const storedPlayState = loadPlayState(currentTable.id);
     if (storedPlayState) {
       playState = { ...playState, ...storedPlayState };
+    }
+    if (!playState.playedCounts) {
+      playState.playedCounts = { north: 0, east: 0, south: 0, west: 0 };
+    }
+    if (playState?.inProgress && !playState.currentTurn && playState.openingLeader) {
+      playState.currentTurn = playState.openingLeader;
     }
 
     const storedDealAtLoad = loadDealState(currentTable.id);
@@ -380,6 +395,9 @@ export const tablePage = {
         declarer: null,
         dummy: null,
         openingLeader: null,
+        currentTurn: null,
+        currentTrick: [],
+        playedCounts: { north: 0, east: 0, south: 0, west: 0 },
         firstLeadPlayed: false,
         tricksNS: 0,
         tricksEW: 0,
@@ -551,7 +569,17 @@ export const tablePage = {
     applyTranslations(host, ctx.language);
 
     const resetBtn = host.querySelector('[data-action="reset-game"]');
-    const resetGameState = () => {
+    const broadcastPlayStateUpdate = () => {
+      if (!roomStateChannel) return;
+      roomStateChannel.send({
+        type: 'broadcast',
+        event: 'play-state-update',
+        payload: { ...playState }
+      }).catch(err => {
+        console.warn('Failed to broadcast playState', err);
+      });
+    };
+    const clearTableState = () => {
       try {
         localStorage.removeItem(`tableReadyState:${currentTable.id}`);
         localStorage.removeItem(`tableDealState:${currentTable.id}`);
@@ -569,6 +597,10 @@ export const tablePage = {
         declarer: null,
         dummy: null,
         openingLeader: null,
+        currentTurn: null,
+        currentTrick: [],
+        playedCounts: { north: 0, east: 0, south: 0, west: 0 },
+        firstLeadPlayed: false,
         tricksNS: 0,
         tricksEW: 0,
         inProgress: false
@@ -591,11 +623,28 @@ export const tablePage = {
       // Clear turn indicators and contract pill
       updateContractDisplay();
       updatePlayTurnIndicator();
+      updateActionIndicator();
 
       // Sync cleared play state to database
       syncPlayStateToDatabase();
+    };
 
-      window.location.reload();
+    const resetGameState = () => {
+      clearTableState();
+
+      if (roomStateChannel) {
+        roomStateChannel.send({
+          type: 'broadcast',
+          event: 'table-reset',
+          payload: { tableId: currentTable.id }
+        }).catch(err => {
+          console.warn('Failed to broadcast table reset', err);
+        });
+      }
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 150);
     };
 
     const showResetModal = () => {
@@ -694,6 +743,13 @@ export const tablePage = {
     ];
 
     const seatCodeMap = { N: 'north', E: 'east', S: 'south', W: 'west' };
+    const seatNameToCode = { north: 'N', east: 'E', south: 'S', west: 'W' };
+    const slotLetterMap = { south: 'S', north: 'N', west: 'W', east: 'E' };
+    const getTrickSlotLetterForSeat = (seatCode) => {
+      const seatName = seatCodeMap[seatCode];
+      const mapping = slotMapping.find((m) => m.seat === seatName);
+      return mapping ? slotLetterMap[mapping.slot] : seatCode;
+    };
     const getDummySeat = () => (playState?.dummy ? seatCodeMap[playState.dummy] : null);
     const shouldRevealDummy = (seatName) => playState?.inProgress && playState?.firstLeadPlayed && getDummySeat() === seatName;
     const shouldShowHcp = (seatName) => {
@@ -703,6 +759,58 @@ export const tablePage = {
       return false;
     };
     const getOpeningLeaderSeat = () => (playState?.openingLeader ? seatCodeMap[playState.openingLeader] : null);
+    const getCurrentTurnSeatName = () => (playState?.currentTurn ? seatCodeMap[playState.currentTurn] : getOpeningLeaderSeat());
+
+    const renderPlayArea = () => {
+      if (!gameArea) return;
+      gameArea.innerHTML = `
+        <div class="play-area">
+          <div class="trick-area">
+            <div class="trick-slot" data-trick-slot="N"></div>
+            <div class="trick-slot" data-trick-slot="E"></div>
+            <div class="trick-slot" data-trick-slot="S"></div>
+            <div class="trick-slot" data-trick-slot="W"></div>
+          </div>
+        </div>
+      `;
+
+      const trickMap = new Map((playState?.currentTrick || []).map(entry => [entry.seat, entry.card]));
+      trickMap.forEach((card, seat) => {
+        const slotLetter = getTrickSlotLetterForSeat(seat);
+        const slot = gameArea.querySelector(`[data-trick-slot="${slotLetter}"]`);
+        if (!slot || !card) return;
+        slot.innerHTML = '';
+        slot.appendChild(createCardElement(card, true, false));
+      });
+    };
+
+    const animateCardToSlot = (cardEl, targetSlot) => {
+      if (!cardEl || !targetSlot) return;
+      const sourceRect = cardEl.getBoundingClientRect();
+      const targetRect = targetSlot.getBoundingClientRect();
+
+      const ghost = cardEl.cloneNode(true);
+      ghost.style.position = 'fixed';
+      ghost.style.left = `${sourceRect.left}px`;
+      ghost.style.top = `${sourceRect.top}px`;
+      ghost.style.width = `${sourceRect.width}px`;
+      ghost.style.height = `${sourceRect.height}px`;
+      ghost.style.margin = '0';
+      ghost.style.zIndex = '9999';
+      ghost.style.transition = 'transform 320ms ease, opacity 320ms ease';
+      document.body.appendChild(ghost);
+
+      const deltaX = targetRect.left - sourceRect.left + (targetRect.width - sourceRect.width) / 2;
+      const deltaY = targetRect.top - sourceRect.top + (targetRect.height - sourceRect.height) / 2;
+
+      requestAnimationFrame(() => {
+        ghost.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+      });
+
+      ghost.addEventListener('transitionend', () => {
+        ghost.remove();
+      }, { once: true });
+    };
 
     const updatePlayTurnIndicator = () => {
       slotMapping.forEach(({ slot }) => {
@@ -756,13 +864,67 @@ export const tablePage = {
         }
         container.appendChild(nameLabel);
 
+        const isVisible = viewerSeat === seat || shouldRevealDummy(seat);
+        const baseCount = currentDeal.hands?.[seat]?.length || 0;
+        const playedCount = playState.playedCounts?.[seat] || 0;
+        const hiddenCount = Math.max(0, baseCount - playedCount);
+        const displayHand = isVisible
+          ? currentDeal.hands[seat]
+          : Array.from({ length: hiddenCount }, () => ({}));
+
         const hand = createCardDisplay(
-          currentDeal.hands[seat],
+          displayHand,
           slot,
-          viewerSeat === seat || shouldRevealDummy(seat),
+          isVisible,
           isRedBack
         );
         container.appendChild(hand);
+
+        const currentTurnSeat = getCurrentTurnSeatName();
+        if (playState?.inProgress && currentTurnSeat === seat && viewerSeat === seat) {
+          hand.querySelectorAll('.playing-card').forEach((cardEl) => {
+            cardEl.classList.add('playable-card');
+            cardEl.addEventListener('click', () => {
+              if (!playState?.inProgress) return;
+              if (getCurrentTurnSeatName() !== seat) return;
+
+              const rank = cardEl.dataset.rank;
+              const suit = cardEl.dataset.suit;
+              const handCards = currentDeal.hands[seat];
+              const cardIndex = handCards.findIndex(c => String(c.rank) === String(rank) && String(c.suit) === String(suit));
+              if (cardIndex === -1) return;
+
+              const [playedCard] = handCards.splice(cardIndex, 1);
+              const seatCode = seatNameToCode[seat];
+              playState.currentTrick = Array.isArray(playState.currentTrick) ? playState.currentTrick : [];
+              playState.currentTrick.push({ seat: seatCode, card: playedCard });
+
+              if (!playState.playedCounts) {
+                playState.playedCounts = { north: 0, east: 0, south: 0, west: 0 };
+              }
+              playState.playedCounts[seat] = (playState.playedCounts[seat] || 0) + 1;
+
+              const nextSeatName = nextSeat(seat);
+              playState.currentTurn = seatNameToCode[nextSeatName];
+
+              try {
+                localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState));
+              } catch (e) {
+                console.warn('Failed to persist playState', e);
+              }
+
+              broadcastPlayStateUpdate();
+
+              renderHandsForPlayPhase();
+              renderPlayArea();
+              updateActionIndicator();
+
+              const targetSlotLetter = getTrickSlotLetterForSeat(seatCode);
+              const targetSlot = gameArea?.querySelector(`[data-trick-slot="${targetSlotLetter}"]`);
+              animateCardToSlot(cardEl, targetSlot);
+            }, { once: true });
+          });
+        }
 
         container.classList.toggle('dummy-hand', shouldRevealDummy(seat));
         container.classList.toggle('hand-disabled', viewerSeat === seat && shouldRevealDummy(seat));
@@ -787,6 +949,8 @@ export const tablePage = {
             } catch (err) {
               console.warn('Failed to persist playState', err);
             }
+
+            broadcastPlayStateUpdate();
 
             renderHandsForPlayPhase();
           }, { once: true });
@@ -835,6 +999,9 @@ export const tablePage = {
       playState.declarer = declarer;
       playState.dummy = dummy;
       playState.openingLeader = openingLeader;
+      playState.currentTurn = openingLeader;
+      playState.currentTrick = [];
+      playState.playedCounts = { north: 0, east: 0, south: 0, west: 0 };
       playState.firstLeadPlayed = false;
       playState.tricksNS = 0;
       playState.tricksEW = 0;
@@ -846,9 +1013,15 @@ export const tablePage = {
       // Sync to database
       syncPlayStateToDatabase();
       
+      // Broadcast to other players
+      console.log('Broadcasting playState to other players...', playState);
+      broadcastPlayStateUpdate();
+      
       renderHandsForPlayPhase();
+      renderPlayArea();
       updateContractDisplay();
       updatePlayTurnIndicator();
+      updateActionIndicator();
     };
 
     const resolveContractFallback = () => {
@@ -907,12 +1080,19 @@ export const tablePage = {
       const storedBidding = loadBiddingState(currentTable.id);
       const storedDeal = loadDealState(currentTable.id);
 
+      if (playState?.inProgress) {
+        const currentTurnSeat = getCurrentTurnSeatName();
+        if (currentTurnSeat) {
+          markSeat(currentTurnSeat);
+        }
+      }
+
       // If no deal yet, highlight dealer who needs to mark ready
-      if (!storedDeal) {
+      if (!storedDeal && !playState?.inProgress) {
         markSeat(dealerSeat, { highlightToggle: !playerReadyState[dealerSeat] });
       }
       // If deal exists but all not ready, highlight players who need to mark ready
-      else if (storedDeal && !storedBidding) {
+      else if (storedDeal && !storedBidding && !playState?.inProgress) {
         ['north', 'south', 'east', 'west'].forEach(seat => {
           if (!playerReadyState[seat]) {
             markSeat(seat, { highlightToggle: true });
@@ -920,7 +1100,7 @@ export const tablePage = {
         });
       }
       // If bidding state exists, highlight current bidder
-      else if (storedBidding && !storedBidding.ended) {
+      else if (storedBidding && !storedBidding.ended && !playState?.inProgress) {
         markSeat(storedBidding.currentSeat);
       }
 
@@ -1022,6 +1202,9 @@ export const tablePage = {
 
       if (playState?.inProgress) {
         renderHandsForPlayPhase();
+        renderPlayArea();
+        updateActionIndicator();
+        return;
       }
 
       // Always render bidding panel (create default state if missing)
@@ -1516,17 +1699,23 @@ export const tablePage = {
         const newPlayState = loadPlayState(currentTable.id);
         if (newPlayState) {
           playState = { ...playState, ...newPlayState };
+          if (!playState.playedCounts) {
+            playState.playedCounts = { north: 0, east: 0, south: 0, west: 0 };
+          }
+          renderDealAndBidding();
+          updateContractDisplay();
+          updatePlayTurnIndicator();
+          updateActionIndicator();
           if (playState?.inProgress) {
             renderHandsForPlayPhase();
-            updateContractDisplay();
-            updatePlayTurnIndicator();
+            renderPlayArea();
           }
         }
       }
     };
     window.addEventListener('storage', storageHandler);
 
-    let realtimeChannel = null;
+    // Setup realtime channels
     if (ctx.supabaseClient && currentTable.id) {
       realtimeChannel = ctx.supabaseClient
         .channel(`table-seats-${currentTable.id}`)
@@ -1535,6 +1724,52 @@ export const tablePage = {
           updateSeatLabels();
         })
         .subscribe();
+      
+      // Broadcast channel for real-time playState sync
+      roomStateChannel = ctx.supabaseClient
+        .channel(`table-play-state-${currentTable.id}`, {
+          config: {
+            broadcast: { self: false }
+          }
+        })
+        .on('broadcast', { event: 'play-state-update' }, (payload) => {
+          console.log('✓ Play state broadcast received:', payload);
+          
+          if (payload.payload) {
+            // Update playState with broadcast data
+            playState = { ...playState, ...payload.payload };
+            
+            console.log('✓ Updated playState:', playState);
+            
+            // Persist to localStorage
+            try { 
+              localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState)); 
+            } catch (e) { 
+              console.warn('Failed to persist playState', e); 
+            }
+            
+            // Re-render UI
+            renderDealAndBidding();
+            updateContractDisplay();
+            updatePlayTurnIndicator();
+            updateActionIndicator();
+            if (playState.inProgress) {
+              renderHandsForPlayPhase();
+              renderPlayArea();
+            }
+          }
+        })
+        .on('broadcast', { event: 'table-reset' }, (payload) => {
+          if (payload?.payload?.tableId !== currentTable.id) return;
+          console.log('✓ Table reset broadcast received');
+          clearTableState();
+          setTimeout(() => {
+            window.location.reload();
+          }, 150);
+        })
+        .subscribe((status) => {
+          console.log('✓ Room state channel status:', status);
+        });
     }
 
     // Fallback polling to keep state fresh if storage events are missed
@@ -2295,6 +2530,9 @@ export const tablePage = {
       clearInterval(readySyncInterval);
       if (realtimeChannel) {
         ctx.supabaseClient.removeChannel(realtimeChannel);
+      }
+      if (roomStateChannel) {
+        ctx.supabaseClient.removeChannel(roomStateChannel);
       }
       if (chatTableChannel) {
         ctx.supabaseClient.removeChannel(chatTableChannel);
