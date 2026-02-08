@@ -476,11 +476,13 @@
   position: relative;
   padding: 0.75rem 0.5rem;
   box-sizing: border-box;
+  --card-width: 90px;
+  --card-height: 126px;
 }
 
 .trick-slot {
-  width: 72px;
-  height: 100px;
+  width: var(--card-width);
+  height: var(--card-height);
   border: 1px dashed rgba(255, 255, 255, 0.18);
   border-radius: 10px;
   display: flex;
@@ -495,7 +497,7 @@
   align-self: center;
   justify-self: start;
   margin-left: 2rem;
-  margin-top: 0.5rem;
+  margin-top: 3.3rem;
 }
 .trick-slot[data-trick-slot="E"] { 
   grid-column: 3; 
@@ -510,6 +512,7 @@
   align-self: center;
   justify-self: end;
   margin-right: 2rem;
+  margin-bottom: 2.4rem;
 }
 .trick-slot[data-trick-slot="W"] { 
   grid-column: 1; 

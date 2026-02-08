@@ -881,7 +881,15 @@ export const tablePage = {
         container.appendChild(hand);
 
         const currentTurnSeat = getCurrentTurnSeatName();
-        if (playState?.inProgress && currentTurnSeat === seat && viewerSeat === seat) {
+        const dummySeat = getDummySeat();
+        const isDeclarer = viewerSeat && playState?.declarer && seatNameToCode[viewerSeat] === playState.declarer;
+        const isDummyHand = dummySeat === seat;
+        const canPlayThisHand = playState?.inProgress && (
+          (currentTurnSeat === seat && viewerSeat === seat) ||
+          (isDeclarer && currentTurnSeat === seat && isDummyHand)
+        );
+
+        if (canPlayThisHand) {
           hand.querySelectorAll('.playing-card').forEach((cardEl) => {
             cardEl.classList.add('playable-card');
             cardEl.addEventListener('click', () => {
@@ -927,7 +935,9 @@ export const tablePage = {
         }
 
         container.classList.toggle('dummy-hand', shouldRevealDummy(seat));
-        container.classList.toggle('hand-disabled', viewerSeat === seat && shouldRevealDummy(seat));
+        const disableSelf = viewerSeat === seat && shouldRevealDummy(seat);
+        const disableDeclarerOnDummyTurn = isDeclarer && viewerSeat === seat && currentTurnSeat === dummySeat;
+        container.classList.toggle('hand-disabled', disableSelf || disableDeclarerOnDummyTurn);
       });
 
       const openingLeaderSeat = getOpeningLeaderSeat();
