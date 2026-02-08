@@ -641,6 +641,44 @@
   border-radius: 10px;
   transition: all 0.3s ease;
   min-width: 140px;
+  position: relative;
+}
+
+.trick-counter {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 72px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(180, 244, 198, 0.95);
+  color: #0e4a2f;
+  font-weight: 700;
+  font-size: 0.86rem;
+  line-height: 1;
+  text-align: center;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+.trick-counter .count-plus {
+  color: #ffffff;
+  margin: 0 4px;
+}
+
+.trick-counter .count-bonus.good {
+  color: #0b3d27;
+}
+
+.trick-counter .count-bonus.bad {
+  color: #c41e3a;
+}
+
+.trick-counter.ns {
+  left: -88px;
+}
+
+.trick-counter.ew {
+  right: -88px;
 }
 
 .vulnerability-names {
@@ -694,9 +732,26 @@
 .contract-value {
   color: #ffd86b;
   font-weight: 700;
-  font-size: 0.76rem;
+  font-size: 0.95rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  line-height: 1.1;
+}
+
+.contract-value .contract-strain {
+  font-size: 1.2em;
+}
+
+.contract-value .contract-strain.black-suit {
+  color: #1a1a1a;
+}
+
+.contract-value .contract-strain.red-suit {
+  color: #d32f2f;
+}
+
+.contract-value .contract-strain.nt {
+  color: #ffd86b;
 }
 
 .contract-tooltip {
@@ -748,6 +803,10 @@
   background: rgba(255, 255, 255, 0.18);
   font-weight: 600;
   font-size: 0.75rem;
+}
+
+.contract-tooltip .bid-chip .bid-suit {
+  font-size: 1.1em;
 }
 
 .contract-tooltip .bid-chip.call-pass {

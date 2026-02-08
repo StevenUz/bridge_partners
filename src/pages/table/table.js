@@ -66,6 +66,8 @@ let playState = {
   currentTurn: null,     // 'N'/'E'/'S'/'W'
   currentTrick: [],      // [{ seat: 'N', card: { rank, suit } }]
   playedCounts: { north: 0, east: 0, south: 0, west: 0 },
+  trickLocked: false,
+  lastTrickWinner: null,
   firstLeadPlayed: false,
   tricksNS: 0,
   tricksEW: 0,
@@ -384,6 +386,12 @@ export const tablePage = {
     if (!playState.playedCounts) {
       playState.playedCounts = { north: 0, east: 0, south: 0, west: 0 };
     }
+    if (typeof playState.trickLocked !== 'boolean') {
+      playState.trickLocked = false;
+    }
+    if (!('lastTrickWinner' in playState)) {
+      playState.lastTrickWinner = null;
+    }
     if (playState?.inProgress && !playState.currentTurn && playState.openingLeader) {
       playState.currentTurn = playState.openingLeader;
     }
@@ -398,6 +406,8 @@ export const tablePage = {
         currentTurn: null,
         currentTrick: [],
         playedCounts: { north: 0, east: 0, south: 0, west: 0 },
+        trickLocked: false,
+        lastTrickWinner: null,
         firstLeadPlayed: false,
         tricksNS: 0,
         tricksEW: 0,
@@ -463,11 +473,17 @@ export const tablePage = {
       const level = contract.level;
       const strain = contract.strain;
       const isBg = ctx.language === 'bg';
-      const strainLabel = strain === 'NT'
-        ? (isBg ? 'БК' : 'NT')
-        : suitSymbols[strain] || strain;
+      
+      let strainHTML;
+      if (strain === 'NT') {
+        strainHTML = `<span class="contract-strain nt">${isBg ? 'БК' : 'NT'}</span>`;
+      } else {
+        const symbol = suitSymbols[strain] || strain;
+        const colorClass = (strain === 'S' || strain === 'C') ? 'black-suit' : 'red-suit';
+        strainHTML = `<span class="contract-strain ${colorClass}">${symbol}</span>`;
+      }
 
-      let label = `${level} ${strainLabel}`;
+      let label = `${level} ${strainHTML}`;
       if (contract.doubled === 'Doubled') label += ' X';
       if (contract.doubled === 'Redoubled') label += ' XX';
       return label;
@@ -538,7 +554,7 @@ export const tablePage = {
         contractTitleEl.textContent = names;
       }
       
-      contractValueEl.textContent = formatContractLabel(playState.contract);
+      contractValueEl.innerHTML = formatContractLabel(playState.contract);
       if (contractTooltipEl) {
         contractTooltipEl.innerHTML = buildBiddingTooltipTable();
       }
@@ -601,6 +617,8 @@ export const tablePage = {
         currentTrick: [],
         playedCounts: { north: 0, east: 0, south: 0, west: 0 },
         firstLeadPlayed: false,
+        trickLocked: false,
+        lastTrickWinner: null,
         tricksNS: 0,
         tricksEW: 0,
         inProgress: false
@@ -745,12 +763,111 @@ export const tablePage = {
     const seatCodeMap = { N: 'north', E: 'east', S: 'south', W: 'west' };
     const seatNameToCode = { north: 'N', east: 'E', south: 'S', west: 'W' };
     const slotLetterMap = { south: 'S', north: 'N', west: 'W', east: 'E' };
+    const normalizeSeatCode = (seat) => (seat ? (seatNameToCode[seat] || seat) : seat);
+    const normalizeSeatName = (seat) => (seat ? (seatCodeMap[seat] || seat) : seat);
     const getTrickSlotLetterForSeat = (seatCode) => {
-      const seatName = seatCodeMap[seatCode];
+      const seatName = normalizeSeatName(seatCode);
       const mapping = slotMapping.find((m) => m.seat === seatName);
       return mapping ? slotLetterMap[mapping.slot] : seatCode;
     };
-    const getDummySeat = () => (playState?.dummy ? seatCodeMap[playState.dummy] : null);
+    const normalizeSuit = (suit) => {
+      if (!suit) return suit;
+      const map = { '♣': 'C', '♦': 'D', '♥': 'H', '♠': 'S' };
+      return map[suit] || suit;
+    };
+    const rankValue = (rank) => {
+      const map = { A: 14, K: 13, Q: 12, J: 11, T: 10 };
+      if (typeof rank === 'number') return rank;
+      const r = String(rank).toUpperCase();
+      if (map[r]) return map[r];
+      const num = Number(r);
+      return Number.isNaN(num) ? 0 : num;
+    };
+    const determineTrickWinner = (trickCards, trumpStrain) => {
+      if (!Array.isArray(trickCards) || trickCards.length === 0) return null;
+      const leadSuit = normalizeSuit(trickCards[0].card?.suit);
+      const trump = trumpStrain && trumpStrain !== 'NT' ? trumpStrain : null;
+
+      let winner = trickCards[0];
+      trickCards.forEach((entry) => {
+        const suit = normalizeSuit(entry.card?.suit);
+        const winSuit = normalizeSuit(winner.card?.suit);
+        const entryIsTrump = trump && suit === trump;
+        const winnerIsTrump = trump && winSuit === trump;
+
+        if (entryIsTrump && !winnerIsTrump) {
+          winner = entry;
+          return;
+        }
+        if (!entryIsTrump && winnerIsTrump) return;
+
+        const suitToCompare = entryIsTrump ? trump : leadSuit;
+        if (suit !== suitToCompare || winSuit !== suitToCompare) return;
+
+        if (rankValue(entry.card?.rank) > rankValue(winner.card?.rank)) {
+          winner = entry;
+        }
+      });
+
+      return winner?.seat || null;
+    };
+    const updateTrickCounters = () => {
+      const nsEl = host.querySelector('[data-vulnerability-ns]');
+      const ewEl = host.querySelector('[data-vulnerability-ew]');
+      if (!nsEl || !ewEl) return;
+
+      const contractLevel = playState.contract?.level || null;
+      const declarerSide = playState.declarer
+        ? (['N', 'S'].includes(playState.declarer) ? 'NS' : 'EW')
+        : null;
+      const requiredDeclarer = contractLevel ? 6 + Number(contractLevel) : null;
+      const expectedDefenders = requiredDeclarer ? 13 - requiredDeclarer : null;
+
+      const buildCounterHTML = (base, bonus, bonusClass) => {
+        if (!bonus || bonus <= 0) {
+          return `<span class="count-main">${base}</span>`;
+        }
+        return `
+          <span class="count-main">${base}</span>
+          <span class="count-plus"> + </span>
+          <span class="count-bonus ${bonusClass}">${bonus}</span>
+        `;
+      };
+
+      let nsBadge = nsEl.querySelector('.trick-counter.ns');
+      if (!nsBadge) {
+        nsBadge = document.createElement('div');
+        nsBadge.className = 'trick-counter ns';
+        nsEl.appendChild(nsBadge);
+      }
+
+      let ewBadge = ewEl.querySelector('.trick-counter.ew');
+      if (!ewBadge) {
+        ewBadge = document.createElement('div');
+        ewBadge.className = 'trick-counter ew';
+        ewEl.appendChild(ewBadge);
+      }
+
+      if (requiredDeclarer && expectedDefenders && declarerSide) {
+        const nsTricks = playState.tricksNS || 0;
+        const ewTricks = playState.tricksEW || 0;
+        const nsIsDeclarer = declarerSide === 'NS';
+        const nsBonus = nsIsDeclarer
+          ? Math.max(0, nsTricks - requiredDeclarer)
+          : Math.max(0, nsTricks - expectedDefenders);
+        const ewBonus = nsIsDeclarer
+          ? Math.max(0, ewTricks - expectedDefenders)
+          : Math.max(0, ewTricks - requiredDeclarer);
+
+        nsBadge.innerHTML = buildCounterHTML(nsTricks, nsBonus, nsIsDeclarer ? 'good' : 'bad');
+        ewBadge.innerHTML = buildCounterHTML(ewTricks, ewBonus, nsIsDeclarer ? 'bad' : 'good');
+      } else {
+        nsBadge.textContent = String(playState.tricksNS || 0);
+        ewBadge.textContent = String(playState.tricksEW || 0);
+      }
+    };
+    updateTrickCounters();
+    const getDummySeat = () => (playState?.dummy ? normalizeSeatName(playState.dummy) : null);
     const shouldRevealDummy = (seatName) => playState?.inProgress && playState?.firstLeadPlayed && getDummySeat() === seatName;
     const shouldShowHcp = (seatName) => {
       const dummySeat = getDummySeat();
@@ -758,8 +875,21 @@ export const tablePage = {
       if (playState?.inProgress && playState?.firstLeadPlayed && dummySeat === seatName && viewerSeat !== dummySeat) return true;
       return false;
     };
-    const getOpeningLeaderSeat = () => (playState?.openingLeader ? seatCodeMap[playState.openingLeader] : null);
-    const getCurrentTurnSeatName = () => (playState?.currentTurn ? seatCodeMap[playState.currentTurn] : getOpeningLeaderSeat());
+    const getOpeningLeaderSeat = () => (playState?.openingLeader ? normalizeSeatName(playState.openingLeader) : null);
+    const getCurrentTurnSeatName = () => (playState?.currentTurn ? normalizeSeatName(playState.currentTurn) : getOpeningLeaderSeat());
+    const syncHandsFromTrick = () => {
+      if (!currentDeal?.hands || !Array.isArray(playState?.currentTrick)) return;
+      playState.currentTrick.forEach((entry) => {
+        const seatName = seatCodeMap[entry.seat];
+        if (!seatName || !currentDeal.hands?.[seatName]) return;
+        const hand = currentDeal.hands[seatName];
+        const idx = hand.findIndex(c => String(c.rank) === String(entry.card?.rank)
+          && String(c.suit) === String(entry.card?.suit));
+        if (idx >= 0) {
+          hand.splice(idx, 1);
+        }
+      });
+    };
 
     const renderPlayArea = () => {
       if (!gameArea) return;
@@ -783,6 +913,8 @@ export const tablePage = {
         slot.appendChild(createCardElement(card, true, false));
       });
     };
+
+    let trickClearTimeout = null;
 
     const animateCardToSlot = (cardEl, targetSlot) => {
       if (!cardEl || !targetSlot) return;
@@ -823,9 +955,9 @@ export const tablePage = {
       });
 
       if (!playState?.inProgress) return;
-      const openingLeaderSeat = getOpeningLeaderSeat();
-      if (!openingLeaderSeat) return;
-      const mapping = slotMapping.find((m) => m.seat === openingLeaderSeat);
+      const currentTurnSeat = getCurrentTurnSeatName();
+      if (!currentTurnSeat) return;
+      const mapping = slotMapping.find((m) => m.seat === currentTurnSeat);
       if (!mapping) return;
       const panel = visualPanels[mapping.slot];
       if (!panel) return;
@@ -833,7 +965,7 @@ export const tablePage = {
       const badge = document.createElement('div');
       badge.className = 'turn-indicator-badge';
       badge.innerHTML = '→';
-      badge.title = `${getSeatPlayerName(openingLeaderSeat)}'s turn`;
+      badge.title = `${getSeatPlayerName(currentTurnSeat)}'s turn`;
       panel.appendChild(badge);
     };
 
@@ -865,9 +997,7 @@ export const tablePage = {
         container.appendChild(nameLabel);
 
         const isVisible = viewerSeat === seat || shouldRevealDummy(seat);
-        const baseCount = currentDeal.hands?.[seat]?.length || 0;
-        const playedCount = playState.playedCounts?.[seat] || 0;
-        const hiddenCount = Math.max(0, baseCount - playedCount);
+        const hiddenCount = currentDeal.hands?.[seat]?.length || 0;
         const displayHand = isVisible
           ? currentDeal.hands[seat]
           : Array.from({ length: hiddenCount }, () => ({}));
@@ -882,12 +1012,13 @@ export const tablePage = {
 
         const currentTurnSeat = getCurrentTurnSeatName();
         const dummySeat = getDummySeat();
-        const isDeclarer = viewerSeat && playState?.declarer && seatNameToCode[viewerSeat] === playState.declarer;
+        const isDeclarer = viewerSeat && playState?.declarer && normalizeSeatCode(viewerSeat) === normalizeSeatCode(playState.declarer);
         const isDummyHand = dummySeat === seat;
-        const canPlayThisHand = playState?.inProgress && (
+        const canPlayThisHand = playState?.inProgress && !playState.trickLocked && (
           (currentTurnSeat === seat && viewerSeat === seat) ||
           (isDeclarer && currentTurnSeat === seat && isDummyHand)
         );
+        console.log(`🎮 Hand ${seat}: currentTurn=${playState?.currentTurn}, currentTurnSeat=${currentTurnSeat}, viewerSeat=${viewerSeat}, canPlay=${canPlayThisHand}`);
 
         if (canPlayThisHand) {
           hand.querySelectorAll('.playing-card').forEach((cardEl) => {
@@ -912,8 +1043,11 @@ export const tablePage = {
               }
               playState.playedCounts[seat] = (playState.playedCounts[seat] || 0) + 1;
 
-              const nextSeatName = nextSeat(seat);
-              playState.currentTurn = seatNameToCode[nextSeatName];
+              const trickCount = playState.currentTrick.length;
+              if (trickCount < 4) {
+                const nextSeatName = nextSeat(seat);
+                playState.currentTurn = seatNameToCode[nextSeatName];
+              }
 
               try {
                 localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState));
@@ -930,6 +1064,52 @@ export const tablePage = {
               const targetSlotLetter = getTrickSlotLetterForSeat(seatCode);
               const targetSlot = gameArea?.querySelector(`[data-trick-slot="${targetSlotLetter}"]`);
               animateCardToSlot(cardEl, targetSlot);
+
+              if (trickCount === 4) {
+                const winnerSeatCode = determineTrickWinner(playState.currentTrick, playState.contract?.strain);
+                console.log('🏆 Trick winner:', winnerSeatCode, 'Current trick:', playState.currentTrick);
+                if (winnerSeatCode) {
+                  playState.lastTrickWinner = winnerSeatCode;
+                  playState.currentTurn = winnerSeatCode;
+                  console.log('✓ Set currentTurn to:', playState.currentTurn);
+                  if (winnerSeatCode === 'N' || winnerSeatCode === 'S') {
+                    playState.tricksNS += 1;
+                  } else {
+                    playState.tricksEW += 1;
+                  }
+                }
+
+                playState.trickLocked = true;
+                try {
+                  localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState));
+                } catch (e) {
+                  console.warn('Failed to persist playState', e);
+                }
+
+                broadcastPlayStateUpdate();
+                updateTrickCounters();
+                updatePlayTurnIndicator();
+
+                if (trickClearTimeout) {
+                  clearTimeout(trickClearTimeout);
+                }
+                trickClearTimeout = setTimeout(() => {
+                  console.log('⏰ Clearing trick. currentTurn before clear:', playState.currentTurn);
+                  playState.currentTrick = [];
+                  playState.trickLocked = false;
+                  console.log('✓ After clear, currentTurn:', playState.currentTurn);
+                  try {
+                    localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState));
+                  } catch (e) {
+                    console.warn('Failed to persist playState', e);
+                  }
+                  broadcastPlayStateUpdate();
+                  renderHandsForPlayPhase();
+                  renderPlayArea();
+                  updateActionIndicator();
+                  updatePlayTurnIndicator();
+                }, 3000);
+              }
             }, { once: true });
           });
         }
@@ -1012,6 +1192,8 @@ export const tablePage = {
       playState.currentTurn = openingLeader;
       playState.currentTrick = [];
       playState.playedCounts = { north: 0, east: 0, south: 0, west: 0 };
+      playState.trickLocked = false;
+      playState.lastTrickWinner = null;
       playState.firstLeadPlayed = false;
       playState.tricksNS = 0;
       playState.tricksEW = 0;
@@ -1029,6 +1211,7 @@ export const tablePage = {
       
       renderHandsForPlayPhase();
       renderPlayArea();
+      updateTrickCounters();
       updateContractDisplay();
       updatePlayTurnIndicator();
       updateActionIndicator();
@@ -1151,11 +1334,16 @@ export const tablePage = {
         if (panel) panel.style.display = 'none';
       });
 
+      const dealHands = (playState?.inProgress && currentDeal?.hands)
+        ? currentDeal.hands
+        : storedDeal.hands;
+
       currentDeal = {
         dealNumber: storedDeal.dealNumber,
-        hands: storedDeal.hands,
+        hands: dealHands,
         isEvenDeal: storedDeal.isEvenDeal
       };
+      syncHandsFromTrick();
       hcpScores = storedDeal.hcpScores || { north: 0, east: 0, south: 0, west: 0 };
 
       // Update vulnerability indicators for current deal
@@ -1712,10 +1900,12 @@ export const tablePage = {
           if (!playState.playedCounts) {
             playState.playedCounts = { north: 0, east: 0, south: 0, west: 0 };
           }
+          syncHandsFromTrick();
           renderDealAndBidding();
           updateContractDisplay();
           updatePlayTurnIndicator();
           updateActionIndicator();
+          updateTrickCounters();
           if (playState?.inProgress) {
             renderHandsForPlayPhase();
             renderPlayArea();
@@ -1748,6 +1938,7 @@ export const tablePage = {
           if (payload.payload) {
             // Update playState with broadcast data
             playState = { ...playState, ...payload.payload };
+            syncHandsFromTrick();
             
             console.log('✓ Updated playState:', playState);
             
