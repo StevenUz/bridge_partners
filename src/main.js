@@ -39,7 +39,20 @@ function buildContext() {
 function handleLanguageChange(language) {
   state.language = setLanguage(language);
   renderHeader();
-  renderPage({ skipHistory: true });
+  
+  // For table view, only apply translations without re-rendering
+  if (state.currentRoute.path === '/table' || state.currentRoute.path === '/observer') {
+    const ctx = buildContext();
+    applyTranslations(mainHost, state.language);
+    
+    // Update any dynamic text that uses t()
+    mainHost.querySelectorAll('[data-dynamic-text]').forEach(el => {
+      const key = el.getAttribute('data-dynamic-text');
+      if (key) el.textContent = ctx.t(key);
+    });
+  } else {
+    renderPage({ skipHistory: true });
+  }
 }
 
 function renderHeader() {

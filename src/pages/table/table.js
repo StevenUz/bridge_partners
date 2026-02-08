@@ -71,8 +71,18 @@ let playState = {
   firstLeadPlayed: false,
   tricksNS: 0,
   tricksEW: 0,
-  inProgress: false
+  inProgress: false,
+  // HCP and fits calculated at deal time (before any cards played)
+  hcpNS: 0,
+  hcpEW: 0,
+  fitsNS: 0,
+  fitsEW: 0,
+  // Original hands at deal time (for showing all cards in results)
+  originalHands: null
 };
+
+// Flag to track if player is viewing results
+let viewingResults = false;
 
 // Vulnerability cycle - 16 deals pattern
 // "0" = neither vulnerable, "-" = EW vulnerable, "|" = NS vulnerable, "+" = both vulnerable
@@ -411,7 +421,12 @@ export const tablePage = {
         firstLeadPlayed: false,
         tricksNS: 0,
         tricksEW: 0,
-        inProgress: false
+        inProgress: false,
+        hcpNS: 0,
+        hcpEW: 0,
+        fitsNS: 0,
+        fitsEW: 0,
+        originalHands: null
       };
       try { localStorage.removeItem(`tablePlayState:${currentTable.id}`); } catch (e) { /* no-op */ }
       const statusEl = host.querySelector('[data-status-text]');
@@ -821,18 +836,25 @@ export const tablePage = {
     };
     
     const calculateObligation = () => {
-      if (!currentDeal?.hands) return null;
+      // Use HCP and fits calculated at deal time (from playState)
+      const hcpNS = playState.hcpNS || 0;
+      const hcpEW = playState.hcpEW || 0;
+      const fitsNS = playState.fitsNS || 0;
+      const fitsEW = playState.fitsEW || 0;
       
-      const hcpNorth = computeHCP(currentDeal.hands.north);
-      const hcpSouth = computeHCP(currentDeal.hands.south);
-      const hcpEast = computeHCP(currentDeal.hands.east);
-      const hcpWest = computeHCP(currentDeal.hands.west);
-      
-      const hcpNS = hcpNorth + hcpSouth;
-      const hcpEW = hcpEast + hcpWest;
-      
-      const fitsNS = countFits(currentDeal.hands.north, currentDeal.hands.south);
-      const fitsEW = countFits(currentDeal.hands.east, currentDeal.hands.west);
+      // If no HCP data available, cannot calculate obligation
+      if (hcpNS === 0 && hcpEW === 0) {
+        return {
+          side: null,
+          points: 0,
+          fits: 0,
+          value: 0,
+          hcpNS: 0,
+          hcpEW: 0,
+          fitsNS: 0,
+          fitsEW: 0
+        };
+      }
       
       // Determine who has the obligation
       let obligationSide = null;
@@ -1202,6 +1224,9 @@ export const tablePage = {
     const showDealResults = () => {
       if (!gameArea) return;
       
+      // Mark that player is viewing results
+      viewingResults = true;
+      
       const contract = playState?.contract;
       const tricksNS = playState?.tricksNS || 0;
       const tricksEW = playState?.tricksEW || 0;
@@ -1252,23 +1277,35 @@ export const tablePage = {
         const obligationValue = obligation?.value || 0;
         
         // Calculate final scores based on who has obligation and who declared
-        if (obligation?.side === declarerSide) {
-          // Declarer side has obligation
-          scoreNS = declarerSide === 'NS' ? (contractResult.total - obligationValue) : -contractResult.total;
-          scoreEW = declarerSide === 'EW' ? (contractResult.total - obligationValue) : -contractResult.total;
-        } else if (obligation?.side) {
-          // Other side has obligation
-          scoreNS = declarerSide === 'NS' ? contractResult.total : (contractResult.total - obligationValue);
-          scoreEW = declarerSide === 'EW' ? contractResult.total : (contractResult.total - obligationValue);
+        // The obligation penalty is always subtracted from the side that has it
+        let nsBaseScore = 0;
+        let ewBaseScore = 0;
+        
+        // First, calculate base scores from contract result
+        if (declarerSide === 'NS') {
+          nsBaseScore = contractResult.total;
+          ewBaseScore = -contractResult.total;
         } else {
-          // No obligation (rare case)
-          scoreNS = declarerSide === 'NS' ? contractResult.total : -contractResult.total;
-          scoreEW = declarerSide === 'EW' ? contractResult.total : -contractResult.total;
+          ewBaseScore = contractResult.total;
+          nsBaseScore = -contractResult.total;
         }
         
-        // Calculate IMP from score difference
-        const scoreDiff = Math.abs(scoreNS - scoreEW) / 2;
-        impValue = convertToIMP(scoreDiff);
+        // Then apply obligation penalty to the side that has it
+        if (obligation?.side === 'NS') {
+          scoreNS = nsBaseScore - obligationValue;
+          scoreEW = ewBaseScore + obligationValue;
+        } else if (obligation?.side === 'EW') {
+          scoreEW = ewBaseScore - obligationValue;
+          scoreNS = nsBaseScore + obligationValue;
+        } else {
+          // No obligation
+          scoreNS = nsBaseScore;
+          scoreEW = ewBaseScore;
+        }
+        
+        // Calculate IMP from absolute score (the winning side's score)
+        const absScore = Math.max(Math.abs(scoreNS), Math.abs(scoreEW));
+        impValue = convertToIMP(absScore);
       }
       
       gameArea.innerHTML = `
@@ -1307,22 +1344,33 @@ export const tablePage = {
             
             <div class="results-section">
               <h3>${t('partnership_data')}</h3>
-              <div class="results-row">
-                <div class="results-label">N-S ${t('points')}:</div>
-                <div class="results-value">${obligation?.hcpNS || 0} HCP</div>
-              </div>
-              <div class="results-row">
-                <div class="results-label">N-S ${t('fit')}:</div>
-                <div class="results-value">${formatFits(obligation?.fitsNS || 0)}</div>
-              </div>
-              <div class="results-row">
-                <div class="results-label">E-W ${t('points')}:</div>
-                <div class="results-value">${obligation?.hcpEW || 0} HCP</div>
-              </div>
-              <div class="results-row">
-                <div class="results-label">E-W ${t('fit')}:</div>
-                <div class="results-value">${formatFits(obligation?.fitsEW || 0)}</div>
-              </div>
+              ${obligation?.side ? `
+                <div class="results-row">
+                  <div class="results-label">${obligation.side} ${t('points')}:</div>
+                  <div class="results-value">${obligation.points} HCP</div>
+                </div>
+                <div class="results-row">
+                  <div class="results-label">${obligation.side} ${t('fit')}:</div>
+                  <div class="results-value">${formatFits(obligation.fits)}</div>
+                </div>
+              ` : `
+                <div class="results-row">
+                  <div class="results-label">N-S ${t('points')}:</div>
+                  <div class="results-value">${obligation?.hcpNS || 0} HCP</div>
+                </div>
+                <div class="results-row">
+                  <div class="results-label">N-S ${t('fit')}:</div>
+                  <div class="results-value">${formatFits(obligation?.fitsNS || 0)}</div>
+                </div>
+                <div class="results-row">
+                  <div class="results-label">E-W ${t('points')}:</div>
+                  <div class="results-value">${obligation?.hcpEW || 0} HCP</div>
+                </div>
+                <div class="results-row">
+                  <div class="results-label">E-W ${t('fit')}:</div>
+                  <div class="results-value">${formatFits(obligation?.fitsEW || 0)}</div>
+                </div>
+              `}
             </div>
             
             <div class="results-section">
@@ -1378,7 +1426,37 @@ export const tablePage = {
               ` : ''}
               <div class="results-row">
                 <div class="results-label">${t('final_score')}:</div>
-                <div class="results-value">N-S: ${scoreNS >= 0 ? '+' : ''}${scoreNS}, E-W: ${scoreEW >= 0 ? '+' : ''}${scoreEW}</div>
+                <div class="results-value">
+                  ${(() => {
+                    const declarerScore = declarerSide === 'NS' ? scoreNS : scoreEW;
+                    const declarerObligation = obligation?.side === declarerSide;
+                    const obligationValue = obligation?.value || 0;
+                    const contractTotal = contractResult.total;
+                    
+                    // Format obligation part
+                    let obligationPart = '';
+                    if (declarerObligation) {
+                      // Declarer has obligation - negative
+                      obligationPart = `-${obligationValue}`;
+                    } else if (obligation?.side) {
+                      // Other side has obligation - positive for declarer
+                      obligationPart = `+${obligationValue}`;
+                    } else {
+                      // No obligation
+                      obligationPart = '0';
+                    }
+                    
+                    // Format contract points part
+                    const contractSign = contractTotal >= 0 ? '+' : '';
+                    const contractPart = `${contractSign}${contractTotal}`;
+                    
+                    // Format final score
+                    const finalSign = declarerScore >= 0 ? '+' : '';
+                    const finalPart = `${finalSign}${declarerScore}`;
+                    
+                    return `${declarerSide}: ${obligationPart} ${contractPart} = ${finalPart}`;
+                  })()}
+                </div>
               </div>
               <div class="results-row">
                 <div class="results-label">IMP:</div>
@@ -1395,8 +1473,44 @@ export const tablePage = {
       const nextBtn = gameArea.querySelector('.btn-next-deal');
       if (nextBtn) {
         nextBtn.addEventListener('click', () => {
-          // TODO: Start next deal
-          console.log('Starting next deal...');
+          // Mark this player as ready for next deal
+          const mySeat = viewPosition;
+          if (!mySeat || mySeat === 'observer') {
+            console.log('Observer cannot trigger next deal');
+            return;
+          }
+          
+          // Set ready state for this player
+          playerReadyState[mySeat] = true;
+          persistReadyState(currentTable.id, playerReadyState);
+          
+          // Mark that player is no longer viewing results
+          viewingResults = false;
+          
+          // Clear original hands for next deal
+          playState.originalHands = null;
+          
+          // Show waiting message for this player
+          gameArea.innerHTML = `
+            <div class="waiting-for-others">
+              <h2>${t('waiting_for_others')}</h2>
+              <p>${t('other_players_viewing_results')}</p>
+              <div class="hourglass-icon hourglass-spinning">
+                <i class="bi bi-hourglass-split"></i>
+              </div>
+            </div>
+          `;
+          
+          // Broadcast ready state to other players
+          if (realtimeChannel) {
+            realtimeChannel.send({
+              type: 'broadcast',
+              event: 'player-ready-next-deal',
+              payload: { seat: mySeat }
+            });
+          }
+          
+          console.log('Player marked ready for next deal:', mySeat);
         });
       }
     };
@@ -1722,6 +1836,10 @@ export const tablePage = {
 
     const applyContractResult = (contract, declarer, dummy, openingLeader) => {
       if (!contract || !declarer || !dummy || !openingLeader) return;
+      
+      // Load deal state to get HCP and fits
+      const storedDeal = loadDealState(currentTable.id);
+      
       playState.contract = contract;
       playState.declarer = declarer;
       playState.dummy = dummy;
@@ -1735,6 +1853,24 @@ export const tablePage = {
       playState.tricksNS = 0;
       playState.tricksEW = 0;
       playState.inProgress = true;
+      
+      // Store HCP and fits from deal state
+      if (storedDeal) {
+        playState.hcpNS = storedDeal.hcpNS || 0;
+        playState.hcpEW = storedDeal.hcpEW || 0;
+        playState.fitsNS = storedDeal.fitsNS || 0;
+        playState.fitsEW = storedDeal.fitsEW || 0;
+        
+        // Store original hands if available
+        if (storedDeal.hands) {
+          playState.originalHands = {
+            north: JSON.parse(JSON.stringify(storedDeal.hands.north || [])),
+            east: JSON.parse(JSON.stringify(storedDeal.hands.east || [])),
+            south: JSON.parse(JSON.stringify(storedDeal.hands.south || [])),
+            west: JSON.parse(JSON.stringify(storedDeal.hands.west || []))
+          };
+        }
+      }
 
       updateVulnerabilityWithContract(host, ctx, currentDeal.dealNumber, playState);
       try { localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState)); } catch (e) { console.warn('Failed to persist playState', e); }
@@ -2075,6 +2211,9 @@ export const tablePage = {
             if (statusEl) statusEl.textContent = 'Passed Out – No play.';
             playState.inProgress = false;
           } else if (result.result === 'Contract') {
+            // Load deal state to get HCP and fits
+            const storedDeal = loadDealState(currentTable.id);
+            
             // Store contract, declarer, dummy, openingLeader in state for play phase
             playState.contract = result.contract;
             playState.declarer = result.declarer;
@@ -2084,6 +2223,24 @@ export const tablePage = {
             playState.tricksNS = 0;
             playState.tricksEW = 0;
             playState.inProgress = true;
+            
+            // Store HCP and fits from deal state
+            if (storedDeal) {
+              playState.hcpNS = storedDeal.hcpNS || 0;
+              playState.hcpEW = storedDeal.hcpEW || 0;
+              playState.fitsNS = storedDeal.fitsNS || 0;
+              playState.fitsEW = storedDeal.fitsEW || 0;
+              
+              // Store original hands if available
+              if (storedDeal.hands) {
+                playState.originalHands = {
+                  north: JSON.parse(JSON.stringify(storedDeal.hands.north || [])),
+                  east: JSON.parse(JSON.stringify(storedDeal.hands.east || [])),
+                  south: JSON.parse(JSON.stringify(storedDeal.hands.south || [])),
+                  west: JSON.parse(JSON.stringify(storedDeal.hands.west || []))
+                };
+              }
+            }
 
             const statusEl = host.querySelector('[data-status-text]');
             if (statusEl) {
@@ -2402,6 +2559,11 @@ export const tablePage = {
     let lastBiddingRaw = getBiddingRaw();
 
     const maybeRenderDealAndBidding = () => {
+      // Don't render if player is viewing results
+      if (viewingResults) {
+        return;
+      }
+      
       const dealRaw = getDealRaw();
       const biddingRaw = getBiddingRaw();
       if (dealRaw !== lastDealRaw || biddingRaw !== lastBiddingRaw) {
@@ -2504,6 +2666,16 @@ export const tablePage = {
           setTimeout(() => {
             window.location.reload();
           }, 150);
+        })
+        .on('broadcast', { event: 'player-ready-next-deal' }, (payload) => {
+          const readySeat = payload?.payload?.seat;
+          if (!readySeat) return;
+          console.log('✓ Player ready for next deal:', readySeat);
+          
+          // Update ready state
+          playerReadyState[readySeat] = true;
+          persistReadyState(currentTable.id, playerReadyState);
+          syncReadyUI();
         })
         .subscribe((status) => {
           console.log('✓ Room state channel status:', status);
@@ -2608,6 +2780,20 @@ export const tablePage = {
         hcpScores.south = computeHCP(currentDeal.hands.south);
         hcpScores.west  = computeHCP(currentDeal.hands.west);
         
+        // Calculate and store HCP and fits in playState for obligation calculation
+        const hcpNS = hcpScores.north + hcpScores.south;
+        const hcpEW = hcpScores.east + hcpScores.west;
+        const fitsNS = countFits(currentDeal.hands.north, currentDeal.hands.south);
+        const fitsEW = countFits(currentDeal.hands.east, currentDeal.hands.west);
+        
+        // Store original hands for display in results (deep copy)
+        playState.originalHands = {
+          north: JSON.parse(JSON.stringify(currentDeal.hands.north)),
+          east: JSON.parse(JSON.stringify(currentDeal.hands.east)),
+          south: JSON.parse(JSON.stringify(currentDeal.hands.south)),
+          west: JSON.parse(JSON.stringify(currentDeal.hands.west))
+        };
+        
         // Update vulnerability indicators for current deal
         updateVulnerabilityIndicators(host, ctx, dealNumber);
         
@@ -2618,7 +2804,11 @@ export const tablePage = {
           dealNumber: currentDeal.dealNumber,
           hands: currentDeal.hands,
           isEvenDeal: currentDeal.isEvenDeal,
-          hcpScores
+          hcpScores,
+          hcpNS,
+          hcpEW,
+          fitsNS,
+          fitsEW
         });
         
         // Update status to bidding and start hourglass animation

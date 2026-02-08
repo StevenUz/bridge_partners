@@ -666,7 +666,8 @@
 }
 
 .trick-counter .count-bonus.good {
-  color: #0b3d27;
+  color: #2ecc71;
+  font-weight: 800;
 }
 
 .trick-counter .count-bonus.bad {
@@ -979,33 +980,51 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 2rem;
+  justify-content: flex-start;
+  padding: 1.5rem;
   animation: fadeIn 0.5s ease-in;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 70%;
+  max-height: 85vh;
+  background: rgba(10, 30, 25, 0.65);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  z-index: 1000;
+  overflow-y: auto;
 }
 
 .results-title {
   color: #ffd86b;
-  font-size: 1.8rem;
+  font-size: 1.6rem;
   font-weight: 700;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   text-align: center;
+  flex-shrink: 0;
 }
 
 .results-table {
-  background: rgba(10, 40, 32, 0.7);
-  border: 2px solid rgba(255, 216, 107, 0.3);
+  background: rgba(10, 40, 32, 0.75);
+  border: 2px solid rgba(255, 216, 107, 0.4);
   border-radius: 12px;
   padding: 1.5rem;
-  min-width: 500px;
-  max-width: 600px;
+  width: 90%;
+  max-width: 1000px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 2rem;
+  max-height: calc(85vh - 180px);
+  overflow-y: auto;
 }
 
 .results-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 0;
+  padding: 0.35rem 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -1016,46 +1035,47 @@
 .results-label {
   color: rgba(255, 255, 255, 0.8);
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.8rem;
 }
 
 .results-value {
   color: #ffd86b;
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 0.85rem;
 }
 
 .results-section {
-  margin-top: 1.5rem;
-  padding-top: 1rem;
-  border-top: 2px solid rgba(255, 216, 107, 0.2);
+  margin-top: 0;
+  padding: 1rem;
+  border: 1px solid rgba(255, 216, 107, 0.2);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .results-section:first-child {
   margin-top: 0;
-  padding-top: 0;
-  border-top: none;
 }
 
 .results-section h3 {
   color: #ffd86b;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 700;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   text-align: center;
 }
 
 .btn-next-deal {
-  margin-top: 2rem;
-  padding: 0.75rem 2rem;
+  margin-top: 1rem;
+  padding: 0.6rem 1.5rem;
   background: linear-gradient(135deg, #2d6a4f, #1b4332);
   color: #ffd86b;
   border: 2px solid #ffd86b;
   border-radius: 8px;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.3s ease;
+  flex-shrink: 0;
 }
 
 .btn-next-deal:hover {
@@ -1066,4 +1086,31 @@
 
 .btn-next-deal:active {
   transform: translateY(0);
+}
+
+/* Waiting for others screen */
+.waiting-for-others {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  padding: 3rem;
+  color: #ffd86b;
+}
+
+.waiting-for-others h2 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.waiting-for-others p {
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 2rem;
+}
+
+.waiting-for-others .hourglass-icon {
+  font-size: 3rem;
 }

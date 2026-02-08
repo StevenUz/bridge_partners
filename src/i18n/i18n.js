@@ -132,7 +132,10 @@ const translations = {
     final_score: 'Final score',
     contract_points: 'Contract points',
     bonuses: 'Bonuses',
-    next_deal: 'Next Deal'
+    next_deal: 'Next Deal',
+    waiting_for_others: 'Waiting for other players',
+    other_players_viewing_results: 'Other players are still reviewing the results...',
+    declarer: 'Declarer'
   },
   bg: {
     brand: 'Bridge Partners',
@@ -260,7 +263,10 @@ const translations = {
     final_score: 'Краен резултат',
     contract_points: 'Точки от договора',
     bonuses: 'Премии',
-    next_deal: 'Следващо раздаване'
+    next_deal: 'Следващо раздаване',
+    waiting_for_others: 'Изчакване на останалите играчи',
+    other_players_viewing_results: 'Останалите играчи все още разглеждат резултатите...',
+    declarer: 'Разиграващ'
   }
 };
 
