@@ -783,6 +783,287 @@ export const tablePage = {
       const num = Number(r);
       return Number.isNaN(num) ? 0 : num;
     };
+    
+    // Obligation table: [HCP][fits][vulnerable]
+    const obligationTable = {
+      20: { 0: { nv: null, v: null }, 1: { nv: 80, v: 80 }, 2: { nv: 110, v: 110 } },
+      21: { 0: { nv: 70, v: 70 }, 1: { nv: 110, v: 110 }, 2: { nv: 270, v: 270 } },
+      22: { 0: { nv: 80, v: 80 }, 1: { nv: 110, v: 110 }, 2: { nv: 290, v: 290 } },
+      23: { 0: { nv: 90, v: 90 }, 1: { nv: 270, v: 290 }, 2: { nv: 400, v: 600 } },
+      24: { 0: { nv: 270, v: 270 }, 1: { nv: 290, v: 320 }, 2: { nv: 410, v: 610 } },
+      25: { 0: { nv: 290, v: 290 }, 1: { nv: 400, v: 600 }, 2: { nv: 410, v: 610 } },
+      26: { 0: { nv: 400, v: 600 }, 1: { nv: 410, v: 610 }, 2: { nv: 430, v: 630 } },
+      27: { 0: { nv: 400, v: 600 }, 1: { nv: 430, v: 630 }, 2: { nv: 460, v: 660 } },
+      28: { 0: { nv: 430, v: 630 }, 1: { nv: 430, v: 630 }, 2: { nv: 460, v: 660 } },
+      29: { 0: { nv: 460, v: 660 }, 1: { nv: 460, v: 660 }, 2: { nv: 960, v: 1400 } },
+      30: { 0: { nv: 460, v: 660 }, 1: { nv: 460, v: 660 }, 2: { nv: 960, v: 1400 } },
+      31: { 0: { nv: 460, v: 660 }, 1: { nv: 960, v: 1400 }, 2: { nv: 980, v: 1430 } },
+      32: { 0: { nv: 460, v: 660 }, 1: { nv: 960, v: 1400 }, 2: { nv: 980, v: 1430 } },
+      33: { 0: { nv: 980, v: 1430 }, 1: { nv: 980, v: 1430 }, 2: { nv: 1480, v: 2180 } },
+      34: { 0: { nv: 980, v: 1430 }, 1: { nv: 980, v: 1430 }, 2: { nv: 1480, v: 2180 } },
+      35: { 0: { nv: 980, v: 1430 }, 1: { nv: 1480, v: 2180 }, 2: { nv: 1480, v: 2180 } },
+      36: { 0: { nv: 980, v: 1430 }, 1: { nv: 1480, v: 2180 }, 2: { nv: 1480, v: 2180 } },
+      37: { 0: { nv: 1480, v: 2180 }, 1: { nv: 1480, v: 2180 }, 2: { nv: 1480, v: 2180 } },
+      38: { 0: { nv: 1480, v: 2180 }, 1: { nv: 1480, v: 2180 }, 2: { nv: 1480, v: 2180 } },
+      39: { 0: { nv: 1480, v: 2180 }, 1: { nv: 1480, v: 2180 }, 2: { nv: 1480, v: 2180 } },
+      40: { 0: { nv: 1480, v: 2180 }, 1: { nv: 1480, v: 2180 }, 2: { nv: 1480, v: 2180 } }
+    };
+    
+    const countFits = (hand1, hand2) => {
+      const suits = ['S', 'H', 'D', 'C'];
+      let fits = 0;
+      suits.forEach(suit => {
+        const count1 = hand1.filter(c => normalizeSuit(c.suit) === suit).length;
+        const count2 = hand2.filter(c => normalizeSuit(c.suit) === suit).length;
+        if (count1 + count2 >= 8) fits++;
+      });
+      return fits;
+    };
+    
+    const calculateObligation = () => {
+      if (!currentDeal?.hands) return null;
+      
+      const hcpNorth = computeHCP(currentDeal.hands.north);
+      const hcpSouth = computeHCP(currentDeal.hands.south);
+      const hcpEast = computeHCP(currentDeal.hands.east);
+      const hcpWest = computeHCP(currentDeal.hands.west);
+      
+      const hcpNS = hcpNorth + hcpSouth;
+      const hcpEW = hcpEast + hcpWest;
+      
+      const fitsNS = countFits(currentDeal.hands.north, currentDeal.hands.south);
+      const fitsEW = countFits(currentDeal.hands.east, currentDeal.hands.west);
+      
+      // Determine who has the obligation
+      let obligationSide = null;
+      let obligationPoints = 0;
+      let obligationFits = 0;
+      let isVulnerable = false;
+      
+      if (hcpNS > hcpEW) {
+        obligationSide = 'NS';
+        obligationPoints = hcpNS;
+        obligationFits = fitsNS;
+        const nsVuln = host.querySelector('[data-vulnerability-ns]');
+        isVulnerable = nsVuln?.classList.contains('vulnerable') || false;
+      } else if (hcpEW > hcpNS) {
+        obligationSide = 'EW';
+        obligationPoints = hcpEW;
+        obligationFits = fitsEW;
+        const ewVuln = host.querySelector('[data-vulnerability-ew]');
+        isVulnerable = ewVuln?.classList.contains('vulnerable') || false;
+      } else {
+        // Equal HCP (both 20)
+        if (fitsNS > fitsEW) {
+          obligationSide = 'NS';
+          obligationPoints = hcpNS;
+          obligationFits = fitsNS;
+          const nsVuln = host.querySelector('[data-vulnerability-ns]');
+          isVulnerable = nsVuln?.classList.contains('vulnerable') || false;
+        } else if (fitsEW > fitsNS) {
+          obligationSide = 'EW';
+          obligationPoints = hcpEW;
+          obligationFits = fitsEW;
+          const ewVuln = host.querySelector('[data-vulnerability-ew]');
+          isVulnerable = ewVuln?.classList.contains('vulnerable') || false;
+        } else {
+          // Equal HCP and fits - no obligation
+          return {
+            side: null,
+            points: 0,
+            fits: 0,
+            value: 0,
+            hcpNS,
+            hcpEW,
+            fitsNS,
+            fitsEW
+          };
+        }
+      }
+      
+      // Lookup obligation value from table
+      const hcpKey = Math.min(Math.max(obligationPoints, 20), 40);
+      const fitsKey = Math.min(obligationFits, 2);
+      const vulnKey = isVulnerable ? 'v' : 'nv';
+      const obligationValue = obligationTable[hcpKey]?.[fitsKey]?.[vulnKey] || 0;
+      
+      return {
+        side: obligationSide,
+        points: obligationPoints,
+        fits: obligationFits,
+        value: obligationValue,
+        hcpNS,
+        hcpEW,
+        fitsNS,
+        fitsEW,
+        isVulnerable
+      };
+    };
+    
+    // IMP conversion table
+    const impTable = [
+      { min: 0, max: 10, imp: 0 },
+      { min: 20, max: 40, imp: 1 },
+      { min: 50, max: 80, imp: 2 },
+      { min: 90, max: 120, imp: 3 },
+      { min: 130, max: 160, imp: 4 },
+      { min: 170, max: 210, imp: 5 },
+      { min: 220, max: 260, imp: 6 },
+      { min: 270, max: 310, imp: 7 },
+      { min: 320, max: 360, imp: 8 },
+      { min: 370, max: 410, imp: 9 },
+      { min: 420, max: 490, imp: 10 },
+      { min: 500, max: 590, imp: 11 },
+      { min: 600, max: 740, imp: 12 },
+      { min: 750, max: 890, imp: 13 },
+      { min: 900, max: 1090, imp: 14 },
+      { min: 1100, max: 1190, imp: 15 },
+      { min: 1200, max: 1490, imp: 16 },
+      { min: 1500, max: 1740, imp: 17 },
+      { min: 1750, max: 1990, imp: 18 },
+      { min: 2000, max: 2240, imp: 19 },
+      { min: 2250, max: 2490, imp: 20 },
+      { min: 2500, max: 2990, imp: 21 },
+      { min: 3000, max: 3490, imp: 22 },
+      { min: 3500, max: 3990, imp: 23 },
+      { min: 4000, max: Infinity, imp: 24 }
+    ];
+    
+    const convertToIMP = (points) => {
+      const absPoints = Math.abs(points);
+      const entry = impTable.find(e => absPoints >= e.min && absPoints <= e.max);
+      return entry ? entry.imp : 0;
+    };
+    
+    const calculateContractPoints = (contract, tricksWon, isVulnerable) => {
+      if (!contract) return { basePoints: 0, bonuses: 0, total: 0, overtricks: 0, undertricks: 0 };
+      
+      const level = contract.level;
+      const strain = contract.strain;
+      const doubled = contract.doubled; // 'None', 'Doubled', 'Redoubled'
+      const requiredTricks = 6 + level;
+      const tricksDiff = tricksWon - requiredTricks;
+      
+      // Determine if contract was made
+      const made = tricksDiff >= 0;
+      const overtricks = made ? tricksDiff : 0;
+      const undertricks = made ? 0 : Math.abs(tricksDiff);
+      
+      let basePoints = 0;
+      let bonuses = 0;
+      
+      if (made) {
+        // Calculate base points for contract tricks
+        if (strain === 'NT') {
+          basePoints = 40 + (level - 1) * 30; // First trick 40, rest 30
+        } else if (strain === 'S' || strain === 'H') {
+          basePoints = level * 30; // Majors
+        } else {
+          basePoints = level * 20; // Minors
+        }
+        
+        // Double/Redouble multiplier for base points
+        if (doubled === 'Doubled') basePoints *= 2;
+        if (doubled === 'Redoubled') basePoints *= 4;
+        
+        // Level/Game/Slam bonuses
+        const isGame = basePoints >= 100;
+        const isSmallSlam = level === 6;
+        const isGrandSlam = level === 7;
+        
+        if (isGrandSlam) {
+          bonuses += isVulnerable ? 1500 : 1000;
+          bonuses += isVulnerable ? 500 : 300; // Add game bonus
+        } else if (isSmallSlam) {
+          bonuses += isVulnerable ? 750 : 500;
+          bonuses += isVulnerable ? 500 : 300; // Add game bonus
+        } else if (isGame) {
+          bonuses += isVulnerable ? 500 : 300;
+        } else {
+          // Part-score bonuses (under game)
+          if (level <= 2 && strain !== 'NT') {
+            // Levels 1-2 in suits (not 2NT)
+            bonuses += 50;
+          } else if (level === 1 && strain === 'NT') {
+            // 1NT
+            bonuses += 50;
+          } else if (level === 2 && strain === 'NT') {
+            // 2NT
+            bonuses += 200;
+          } else if (level === 3 && (strain === 'C' || strain === 'D')) {
+            // 3 minors
+            bonuses += 200;
+          } else if (level === 4 && (strain === 'C' || strain === 'D')) {
+            // 4 minors
+            bonuses += 250;
+          }
+        }
+        
+        // Bonus for making doubled/redoubled contract (only if made exactly)
+        if (overtricks === 0) {
+          if (doubled === 'Doubled') bonuses += 50;
+          if (doubled === 'Redoubled') bonuses += 100;
+        }
+        
+        // Overtrick points
+        if (overtricks > 0) {
+          let overtrickValue = 0;
+          if (doubled === 'None') {
+            // Regular overtricks
+            if (strain === 'NT') {
+              // NT: first overtrick 40, rest 30
+              for (let i = 0; i < overtricks; i++) {
+                overtrickValue += (i === 0) ? 40 : 30;
+              }
+              bonuses += overtrickValue;
+            } else if (strain === 'S' || strain === 'H') {
+              bonuses += overtricks * 30;
+            } else {
+              bonuses += overtricks * 20;
+            }
+          } else if (doubled === 'Doubled') {
+            overtrickValue = isVulnerable ? 200 : 100;
+            bonuses += overtricks * overtrickValue;
+          } else if (doubled === 'Redoubled') {
+            overtrickValue = isVulnerable ? 400 : 200;
+            bonuses += overtricks * overtrickValue;
+          }
+        }
+      } else {
+        // Contract failed - calculate undertrick penalties
+        let penalties = 0;
+        
+        if (doubled === 'None') {
+          penalties = undertricks * (isVulnerable ? 100 : 50);
+        } else if (doubled === 'Doubled') {
+          // First undertrick
+          penalties += isVulnerable ? 200 : 100;
+          // Subsequent undertricks
+          if (undertricks > 1) {
+            penalties += (undertricks - 1) * (isVulnerable ? 300 : 200);
+          }
+        } else if (doubled === 'Redoubled') {
+          // First undertrick
+          penalties += isVulnerable ? 400 : 200;
+          // Subsequent undertricks
+          if (undertricks > 1) {
+            penalties += (undertricks - 1) * (isVulnerable ? 600 : 400);
+          }
+        }
+        
+        basePoints = -penalties;
+      }
+      
+      return {
+        basePoints,
+        bonuses,
+        total: basePoints + bonuses,
+        overtricks,
+        undertricks,
+        made
+      };
+    };
+
     const determineTrickWinner = (trickCards, trumpStrain) => {
       if (!Array.isArray(trickCards) || trickCards.length === 0) return null;
       const leadSuit = normalizeSuit(trickCards[0].card?.suit);
@@ -916,6 +1197,208 @@ export const tablePage = {
           hand.splice(idx, 1);
         }
       });
+    };
+
+    const showDealResults = () => {
+      if (!gameArea) return;
+      
+      const contract = playState?.contract;
+      const tricksNS = playState?.tricksNS || 0;
+      const tricksEW = playState?.tricksEW || 0;
+      const declarerSide = playState?.declarer ? (['N', 'S'].includes(playState.declarer) ? 'NS' : 'EW') : null;
+      
+      const obligation = calculateObligation();
+      const t = (key) => ctx.t(key) || key;
+      
+      // Check if this was "4 passes" (no contract)
+      const isFourPasses = !contract || !declarerSide;
+      
+      // Format fit display
+      const formatFits = (fits) => {
+        if (fits === 0) return t('no_fit');
+        return `${fits} ${t('fit')}${fits > 1 ? 's' : ''}`;
+      };
+      
+      // Calculate final scores
+      let scoreNS = 0;
+      let scoreEW = 0;
+      let impValue = 0;
+      let contractResult = null;
+      
+      if (isFourPasses) {
+        // For 4 passes, result is just the obligation value
+        const obligationValue = obligation?.value || 0;
+        if (obligation?.side === 'NS') {
+          scoreNS = -obligationValue;
+          scoreEW = obligationValue;
+        } else if (obligation?.side === 'EW') {
+          scoreNS = obligationValue;
+          scoreEW = -obligationValue;
+        }
+        // No IMP for 4 passes with 0 obligation
+        if (obligationValue !== 0) {
+          impValue = convertToIMP(obligationValue);
+        }
+      } else {
+        // Calculate contract result
+        const declarerTricks = declarerSide === 'NS' ? tricksNS : tricksEW;
+        const declarerIsVulnerable = declarerSide === 'NS' 
+          ? (host.querySelector('[data-vulnerability-ns]')?.classList.contains('vulnerable') || false)
+          : (host.querySelector('[data-vulnerability-ew]')?.classList.contains('vulnerable') || false);
+        
+        contractResult = calculateContractPoints(contract, declarerTricks, declarerIsVulnerable);
+        
+        // Get obligation values
+        const obligationValue = obligation?.value || 0;
+        
+        // Calculate final scores based on who has obligation and who declared
+        if (obligation?.side === declarerSide) {
+          // Declarer side has obligation
+          scoreNS = declarerSide === 'NS' ? (contractResult.total - obligationValue) : -contractResult.total;
+          scoreEW = declarerSide === 'EW' ? (contractResult.total - obligationValue) : -contractResult.total;
+        } else if (obligation?.side) {
+          // Other side has obligation
+          scoreNS = declarerSide === 'NS' ? contractResult.total : (contractResult.total - obligationValue);
+          scoreEW = declarerSide === 'EW' ? contractResult.total : (contractResult.total - obligationValue);
+        } else {
+          // No obligation (rare case)
+          scoreNS = declarerSide === 'NS' ? contractResult.total : -contractResult.total;
+          scoreEW = declarerSide === 'EW' ? contractResult.total : -contractResult.total;
+        }
+        
+        // Calculate IMP from score difference
+        const scoreDiff = Math.abs(scoreNS - scoreEW) / 2;
+        impValue = convertToIMP(scoreDiff);
+      }
+      
+      gameArea.innerHTML = `
+        <div class="deal-results">
+          <h2 class="results-title">${t('deal_results')}</h2>
+          
+          <div class="results-table">
+            ${!isFourPasses ? `
+            <div class="results-row">
+              <div class="results-label">${t('contract')}:</div>
+              <div class="results-value">${formatContractLabel(contract)}</div>
+            </div>
+            
+            <div class="results-row">
+              <div class="results-label">${t('declarer')}:</div>
+              <div class="results-value">${declarerSide === 'NS' ? 'N-S' : 'E-W'}</div>
+            </div>
+            
+            <div class="results-section">
+              <h3>${t('tricks_won')}</h3>
+              <div class="results-row">
+                <div class="results-label">N-S:</div>
+                <div class="results-value">${tricksNS}</div>
+              </div>
+              <div class="results-row">
+                <div class="results-label">E-W:</div>
+                <div class="results-value">${tricksEW}</div>
+              </div>
+            </div>
+            ` : `
+            <div class="results-row">
+              <div class="results-label">${t('bidding_result')}:</div>
+              <div class="results-value">${t('four_passes')}</div>
+            </div>
+            `}
+            
+            <div class="results-section">
+              <h3>${t('partnership_data')}</h3>
+              <div class="results-row">
+                <div class="results-label">N-S ${t('points')}:</div>
+                <div class="results-value">${obligation?.hcpNS || 0} HCP</div>
+              </div>
+              <div class="results-row">
+                <div class="results-label">N-S ${t('fit')}:</div>
+                <div class="results-value">${formatFits(obligation?.fitsNS || 0)}</div>
+              </div>
+              <div class="results-row">
+                <div class="results-label">E-W ${t('points')}:</div>
+                <div class="results-value">${obligation?.hcpEW || 0} HCP</div>
+              </div>
+              <div class="results-row">
+                <div class="results-label">E-W ${t('fit')}:</div>
+                <div class="results-value">${formatFits(obligation?.fitsEW || 0)}</div>
+              </div>
+            </div>
+            
+            <div class="results-section">
+              <h3>${t('obligation')}</h3>
+              <div class="results-row">
+                <div class="results-label">${t('belongs_to')}:</div>
+                <div class="results-value">
+                  ${obligation?.side ? `${obligation.side} (${obligation.points} HCP, ${formatFits(obligation.fits)})` : t('no_obligation')}
+                </div>
+              </div>
+              ${obligation?.value ? `
+              <div class="results-row">
+                <div class="results-label">${t('obligation_value')}:</div>
+                <div class="results-value">${obligation.value}</div>
+              </div>
+              ` : ''}
+            </div>
+            
+            <div class="results-section">
+              <h3>${t('result')}</h3>
+              ${isFourPasses ? `
+              <div class="results-row">
+                <div class="results-label">${t('final_score')}:</div>
+                <div class="results-value">N-S: ${scoreNS >= 0 ? '+' : ''}${scoreNS}, E-W: ${scoreEW >= 0 ? '+' : ''}${scoreEW}</div>
+              </div>
+              ${impValue > 0 ? `
+              <div class="results-row">
+                <div class="results-label">IMP:</div>
+                <div class="results-value">${impValue}</div>
+              </div>
+              ` : ''}
+              ` : `
+              <div class="results-row">
+                <div class="results-label">${t('contract_result')}:</div>
+                <div class="results-value">
+                  ${contractResult?.made 
+                    ? (contractResult.overtricks > 0 
+                      ? `${t('made_with_overtricks')} (+${contractResult.overtricks})`
+                      : t('made_exactly'))
+                    : `${t('failed')} (-${contractResult.undertricks})`
+                  }
+                </div>
+              </div>
+              <div class="results-row">
+                <div class="results-label">${t('contract_points')}:</div>
+                <div class="results-value">${contractResult?.basePoints >= 0 ? '+' : ''}${contractResult?.basePoints}</div>
+              </div>
+              ${contractResult?.bonuses > 0 ? `
+              <div class="results-row">
+                <div class="results-label">${t('bonuses')}:</div>
+                <div class="results-value">+${contractResult.bonuses}</div>
+              </div>
+              ` : ''}
+              <div class="results-row">
+                <div class="results-label">${t('final_score')}:</div>
+                <div class="results-value">N-S: ${scoreNS >= 0 ? '+' : ''}${scoreNS}, E-W: ${scoreEW >= 0 ? '+' : ''}${scoreEW}</div>
+              </div>
+              <div class="results-row">
+                <div class="results-label">IMP:</div>
+                <div class="results-value">${scoreNS > scoreEW ? `N-S: +${impValue}` : `E-W: +${impValue}`}</div>
+              </div>
+              `}
+            </div>
+          </div>
+          
+          <button class="btn-next-deal">${t('next_deal')}</button>
+        </div>
+      `;
+      
+      const nextBtn = gameArea.querySelector('.btn-next-deal');
+      if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+          // TODO: Start next deal
+          console.log('Starting next deal...');
+        });
+      }
     };
 
     const renderPlayArea = () => {
@@ -1136,6 +1619,22 @@ export const tablePage = {
                 trickClearTimeout = setTimeout(() => {
                   playState.currentTrick = [];
                   playState.trickLocked = false;
+                  
+                  // Check if all 13 tricks have been played
+                  const totalTricks = (playState.tricksNS || 0) + (playState.tricksEW || 0);
+                  if (totalTricks === 13) {
+                    // Deal is complete, show results
+                    playState.inProgress = false;
+                    try {
+                      localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState));
+                    } catch (e) {
+                      console.warn('Failed to persist playState', e);
+                    }
+                    broadcastPlayStateUpdate();
+                    showDealResults();
+                    return;
+                  }
+                  
                   try {
                     localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState));
                   } catch (e) {
