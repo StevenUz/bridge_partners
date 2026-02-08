@@ -877,6 +877,33 @@ export const tablePage = {
     };
     const getOpeningLeaderSeat = () => (playState?.openingLeader ? normalizeSeatName(playState.openingLeader) : null);
     const getCurrentTurnSeatName = () => (playState?.currentTurn ? normalizeSeatName(playState.currentTurn) : getOpeningLeaderSeat());
+    
+    const getLegalCards = (handCards) => {
+      // If this is the first card of the trick, all cards are legal
+      if (!playState?.currentTrick || playState.currentTrick.length === 0) {
+        return handCards.map(() => true);
+      }
+      
+      // Get the lead suit (first card played in this trick)
+      const leadCard = playState.currentTrick[0]?.card;
+      if (!leadCard) {
+        return handCards.map(() => true);
+      }
+      
+      const leadSuit = normalizeSuit(leadCard.suit);
+      
+      // Check if player has any cards in the lead suit
+      const hasLeadSuit = handCards.some(card => normalizeSuit(card.suit) === leadSuit);
+      
+      // If player has cards in lead suit, only those cards are legal
+      if (hasLeadSuit) {
+        return handCards.map(card => normalizeSuit(card.suit) === leadSuit);
+      }
+      
+      // If player has no cards in lead suit, all cards are legal
+      return handCards.map(() => true);
+    };
+    
     const syncHandsFromTrick = () => {
       if (!currentDeal?.hands || !Array.isArray(playState?.currentTrick)) return;
       playState.currentTrick.forEach((entry) => {
@@ -1018,11 +1045,20 @@ export const tablePage = {
           (currentTurnSeat === seat && viewerSeat === seat) ||
           (isDeclarer && currentTurnSeat === seat && isDummyHand)
         );
-        console.log(`🎮 Hand ${seat}: currentTurn=${playState?.currentTurn}, currentTurnSeat=${currentTurnSeat}, viewerSeat=${viewerSeat}, canPlay=${canPlayThisHand}`);
 
         if (canPlayThisHand) {
-          hand.querySelectorAll('.playing-card').forEach((cardEl) => {
-            cardEl.classList.add('playable-card');
+          const handCards = currentDeal.hands[seat];
+          const legalCards = getLegalCards(handCards);
+          
+          hand.querySelectorAll('.playing-card').forEach((cardEl, idx) => {
+            const isLegal = legalCards[idx];
+            
+            if (isLegal) {
+              cardEl.classList.add('playable-card');
+            } else {
+              cardEl.classList.add('disabled-card');
+            }
+            
             cardEl.addEventListener('click', () => {
               if (!playState?.inProgress) return;
               if (getCurrentTurnSeatName() !== seat) return;
@@ -1032,6 +1068,12 @@ export const tablePage = {
               const handCards = currentDeal.hands[seat];
               const cardIndex = handCards.findIndex(c => String(c.rank) === String(rank) && String(c.suit) === String(suit));
               if (cardIndex === -1) return;
+              
+              // Check if this card is legal to play
+              const legalCards = getLegalCards(handCards);
+              if (!legalCards[cardIndex]) {
+                return;
+              }
 
               const [playedCard] = handCards.splice(cardIndex, 1);
               const seatCode = seatNameToCode[seat];
@@ -1067,11 +1109,9 @@ export const tablePage = {
 
               if (trickCount === 4) {
                 const winnerSeatCode = determineTrickWinner(playState.currentTrick, playState.contract?.strain);
-                console.log('🏆 Trick winner:', winnerSeatCode, 'Current trick:', playState.currentTrick);
                 if (winnerSeatCode) {
                   playState.lastTrickWinner = winnerSeatCode;
                   playState.currentTurn = winnerSeatCode;
-                  console.log('✓ Set currentTurn to:', playState.currentTurn);
                   if (winnerSeatCode === 'N' || winnerSeatCode === 'S') {
                     playState.tricksNS += 1;
                   } else {
@@ -1094,10 +1134,8 @@ export const tablePage = {
                   clearTimeout(trickClearTimeout);
                 }
                 trickClearTimeout = setTimeout(() => {
-                  console.log('⏰ Clearing trick. currentTurn before clear:', playState.currentTurn);
                   playState.currentTrick = [];
                   playState.trickLocked = false;
-                  console.log('✓ After clear, currentTurn:', playState.currentTurn);
                   try {
                     localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState));
                   } catch (e) {
