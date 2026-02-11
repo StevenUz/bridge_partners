@@ -173,3 +173,127 @@
   font-size: 1rem;
   line-height: 1;
 }
+/* IMP Table Button and Popup */
+[data-imp-table-btn] {
+  cursor: pointer;
+  color: #f1f7f3;
+  transition: color 0.2s ease;
+}
+
+[data-imp-table-btn]:hover {
+  color: var(--velvet-bright);
+}
+
+.imp-table-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 93, 70, 0.98);
+  color: #f1f7f3;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 10000;
+  min-width: 350px;
+  border: 2px solid #3b8a6a;
+  backdrop-filter: blur(10px);
+}
+
+.imp-table-popup.show {
+  display: block !important;
+}
+
+.imp-table-popup h4 {
+  margin: 0 0 15px 0;
+  text-align: center;
+  color: var(--velvet-bright);
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.imp-cycle-info {
+  text-align: center;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+  color: #c8e5d5;
+}
+
+.imp-grid {
+  display: grid;
+  grid-template-columns: auto repeat(4, 1fr);
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.imp-grid-header,
+.imp-grid-cell,
+.imp-grid-row-label {
+  padding: 10px;
+  text-align: center;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.imp-grid-header {
+  background: rgba(45, 138, 102, 0.4);
+  color: var(--velvet-bright);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.imp-grid-row-label {
+  background: rgba(45, 138, 102, 0.4);
+  color: var(--velvet-bright);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.imp-grid-cell {
+  background: rgba(29, 96, 73, 0.6);
+  border: 1px solid #3b8a6a;
+  transition: all 0.2s ease;
+  min-height: 45px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.imp-grid-cell:hover {
+  background: rgba(45, 138, 102, 0.4);
+  border-color: var(--velvet-bright);
+}
+
+.imp-grid-cell.current-game {
+  border: 2px solid var(--velvet-bright);
+  box-shadow: 0 0 12px rgba(45, 138, 102, 0.5);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(45, 138, 102, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(45, 138, 102, 0.8);
+  }
+}
+
+.imp-grid-cell.positive {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.imp-grid-cell.negative {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.imp-grid-cell.empty {
+  color: #6b7280;
+  font-style: italic;
+}

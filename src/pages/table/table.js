@@ -5,6 +5,13 @@ import { applyTranslations, languages } from '../../i18n/i18n.js';
 import { dealCards } from './card-dealer.js';
 import { DetermineAuctionResult, DetermineContract, DetermineDeclarer, DetermineOpeningLeader, CallType } from '../../bridge/auction.js';
 import { createCardElement } from './card-renderer.js';
+import { 
+  findExistingCycle, 
+  createNewCycle, 
+  updateCycleAfterDeal, 
+  getCurrentPlayers,
+  dbCycleToLocal 
+} from '../../bridge/imp-cycle.js';
 
 const seatOrder = ['south', 'west', 'north', 'east'];
 const suitOrder = ['C', 'D', 'H', 'S', 'NT'];
@@ -88,6 +95,101 @@ let viewingResults = false;
 // "0" = neither vulnerable, "-" = EW vulnerable, "|" = NS vulnerable, "+" = both vulnerable
 const vulnerabilityPattern = "0_-_|_+_-_|_+_0_|_+_0_-_+_0_-_|";
 const vulnerabilityStates = vulnerabilityPattern.split('_').filter(s => s !== '');
+
+// IMP cycle tracking - 16 games in 4x4 table
+// Sequence: A1-B1-C1-D1-B2-C2-D2-A2-C3-D3-A3-B3-D4-A4-B4-C4
+const impCycleSequence = [
+  'A1', 'B1', 'C1', 'D1',  // Games 1-4
+  'B2', 'C2', 'D2', 'A2',  // Games 5-8
+  'C3', 'D3', 'A3', 'B3',  // Games 9-12
+  'D4', 'A4', 'B4', 'C4'   // Games 13-16
+];
+
+let impCycleData = {
+  cycleId: null, // Database cycle ID
+  cycleNumber: 1,
+  currentGame: 1, // 1-16 within current cycle
+  table: {
+    // Each cell stores cumulative IMP for NS perspective
+    A1: null, A2: null, A3: null, A4: null,
+    B1: null, B2: null, B3: null, B4: null,
+    C1: null, C2: null, C3: null, C4: null,
+    D1: null, D2: null, D3: null, D4: null
+  }
+};
+
+function loadImpCycleData(tableId) {
+  try {
+    const raw = localStorage.getItem(`tableImpCycle:${tableId}`);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn('Failed to load IMP cycle data', err);
+    return null;
+  }
+}
+
+function persistImpCycleData(tableId, data) {
+  try {
+    localStorage.setItem(`tableImpCycle:${tableId}`, JSON.stringify(data));
+  } catch (err) {
+    console.warn('Failed to persist IMP cycle data', err);
+  }
+}
+
+async function recordImpResult(tableId, impForNS, supabaseClient) {
+  // Load current cycle data
+  const stored = loadImpCycleData(tableId);
+  if (stored) {
+    impCycleData = stored;
+  }
+  
+  // Get current cell in sequence
+  const gameIndex = (impCycleData.currentGame - 1) % 16;
+  const cellId = impCycleSequence[gameIndex];
+  
+  // Get previous value in same cell (for cumulative sum)
+  const previousValue = impCycleData.table[cellId] || 0;
+  
+  // Store cumulative IMP (from NS perspective)
+  impCycleData.table[cellId] = previousValue + impForNS;
+  
+  const currentGameBeforeAdvance = impCycleData.currentGame;
+  
+  // Advance to next game
+  impCycleData.currentGame++;
+  
+  // Check if cycle completed
+  if (impCycleData.currentGame > 16) {
+    impCycleData.cycleNumber++;
+    impCycleData.currentGame = 1;
+    // Reset table for new cycle
+    Object.keys(impCycleData.table).forEach(key => {
+      impCycleData.table[key] = null;
+    });
+  }
+  
+  // Persist locally
+  persistImpCycleData(tableId, impCycleData);
+  
+  // Update database if we have a cycle ID and Supabase client
+  if (impCycleData.cycleId && supabaseClient) {
+    await updateCycleAfterDeal(
+      supabaseClient,
+      impCycleData.cycleId,
+      impForNS,
+      currentGameBeforeAdvance,
+      impCycleData.table
+    );
+  }
+}
+
+function getImpValueForPerspective(cellValue, isNS) {
+  if (cellValue === null) return '';
+  // NS sees positive values as-is, EW sees them inverted
+  const value = isNS ? cellValue : -cellValue;
+  return value >= 0 ? `+${value}` : `${value}`;
+}
 
 // Track ready state for each player
 const playerReadyState = {
@@ -384,6 +486,12 @@ export const tablePage = {
 
     const tableId = getTableId();
     currentTable.id = tableId;
+    
+    // Load IMP cycle data for this table
+    const storedImpData = loadImpCycleData(tableId);
+    if (storedImpData) {
+      impCycleData = storedImpData;
+    }
     
     // Declare channels at top level for access in functions
     let realtimeChannel = null;
@@ -1307,6 +1415,14 @@ export const tablePage = {
         const absScore = Math.max(Math.abs(scoreNS), Math.abs(scoreEW));
         impValue = convertToIMP(absScore);
       }
+      
+      // Determine IMP from NS perspective (positive if NS wins, negative if EW wins)
+      const impForNS = scoreNS > scoreEW ? impValue : (scoreEW > scoreNS ? -impValue : 0);
+      
+      // Record IMP result in cycle table (async, but don't wait)
+      recordImpResult(currentTable.id, impForNS, ctx.supabaseClient).catch(err => {
+        console.warn('Failed to record IMP result in database:', err);
+      });
       
       gameArea.innerHTML = `
         <div class="deal-results">
@@ -2600,6 +2716,15 @@ export const tablePage = {
             playState.playedCounts = { north: 0, east: 0, south: 0, west: 0 };
           }
           syncHandsFromTrick();
+          
+          // Check if deal is complete (all 13 tricks played)
+          const totalTricks = (playState.tricksNS || 0) + (playState.tricksEW || 0);
+          if (totalTricks === 13 && !playState.inProgress) {
+            // Deal is complete, show results
+            showDealResults();
+            return;
+          }
+          
           renderDealAndBidding();
           updateContractDisplay();
           updatePlayTurnIndicator();
@@ -2646,6 +2771,14 @@ export const tablePage = {
               localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState)); 
             } catch (e) { 
               console.warn('Failed to persist playState', e); 
+            }
+            
+            // Check if deal is complete (all 13 tricks played)
+            const totalTricks = (playState.tricksNS || 0) + (playState.tricksEW || 0);
+            if (totalTricks === 13 && !playState.inProgress) {
+              // Deal is complete, show results
+              showDealResults();
+              return;
             }
             
             // Re-render UI
