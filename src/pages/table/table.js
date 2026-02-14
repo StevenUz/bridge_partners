@@ -2625,48 +2625,9 @@ export const tablePage = {
             if (statusEl) statusEl.textContent = 'Passed Out – No play.';
             playState.inProgress = false;
           } else if (result.result === 'Contract') {
-            // Load deal state to get HCP and fits
-            const storedDeal = loadDealState(currentTable.id);
-            
-            // Store contract, declarer, dummy, openingLeader in state for play phase
-            playState.contract = result.contract;
-            playState.declarer = result.declarer;
-            playState.dummy = result.dummy;
-            playState.openingLeader = result.openingLeader;
-            playState.firstLeadPlayed = false;
-            playState.tricksNS = 0;
-            playState.tricksEW = 0;
-            playState.inProgress = true;
-            
-            // Store HCP and fits from deal state
-            if (storedDeal) {
-              playState.hcpNS = storedDeal.hcpNS || 0;
-              playState.hcpEW = storedDeal.hcpEW || 0;
-              playState.fitsNS = storedDeal.fitsNS || 0;
-              playState.fitsEW = storedDeal.fitsEW || 0;
-              
-              // Store original hands if available
-              if (storedDeal.hands) {
-                playState.originalHands = {
-                  north: JSON.parse(JSON.stringify(storedDeal.hands.north || [])),
-                  east: JSON.parse(JSON.stringify(storedDeal.hands.east || [])),
-                  south: JSON.parse(JSON.stringify(storedDeal.hands.south || [])),
-                  west: JSON.parse(JSON.stringify(storedDeal.hands.west || []))
-                };
-              }
-            }
-
-            const statusEl = host.querySelector('[data-status-text]');
-            if (statusEl) {
-              statusEl.textContent = `Contract: ${result.contract.level}${result.contract.strain}${result.contract.doubled !== 'None' ? (result.contract.doubled === 'Doubled' ? 'X' : 'XX') : ''} by ${result.declarer} (Dummy: ${result.dummy}, Lead: ${result.openingLeader})`;
-            }
-
-            // Update vulnerability indicators with contract and tricks
-            updateVulnerabilityWithContract(host, ctx, currentDeal.dealNumber, playState);
-            try { localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState)); } catch (e) { console.warn('Failed to persist playState', e); }
-            renderHandsForPlayPhase();
-            updateContractDisplay();
-            updatePlayTurnIndicator();
+            // Use applyContractResult which properly sets currentTurn, currentTrick,
+            // playedCounts, broadcasts state, and syncs to database
+            applyContractResult(result.contract, result.declarer, result.dummy, result.openingLeader);
           }
         }
 
