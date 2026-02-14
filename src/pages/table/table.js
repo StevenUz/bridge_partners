@@ -16,6 +16,19 @@ import {
 const seatOrder = ['south', 'west', 'north', 'east'];
 const suitOrder = ['C', 'D', 'H', 'S', 'NT'];
 
+function getDealerSeatForDeal(dealNum) {
+  const index = (dealNum - 1) % seatOrder.length;
+  return seatOrder[index];
+}
+
+function getNextDealNumber(tableId, fallback) {
+  const storedDeal = loadDealState(tableId);
+  if (storedDeal?.dealNumber) return storedDeal.dealNumber + 1;
+  const lastDeal = loadLastDealNumber(tableId);
+  if (lastDeal) return lastDeal + 1;
+  return fallback || 1;
+}
+
 function sameTeam(a, b) {
   const ns = ['north', 'south'];
   const ew = ['east', 'west'];
@@ -105,17 +118,22 @@ const impCycleSequence = [
   'D4', 'A4', 'B4', 'C4'   // Games 13-16
 ];
 
+function createEmptyImpCycleData() {
+  return {
+    cycleId: null,
+    cycleNumber: 1,
+    currentGame: 1,
+    table: {
+      A1: null, A2: null, A3: null, A4: null,
+      B1: null, B2: null, B3: null, B4: null,
+      C1: null, C2: null, C3: null, C4: null,
+      D1: null, D2: null, D3: null, D4: null
+    }
+  };
+}
+
 let impCycleData = {
-  cycleId: null, // Database cycle ID
-  cycleNumber: 1,
-  currentGame: 1, // 1-16 within current cycle
-  table: {
-    // Each cell stores cumulative IMP for NS perspective
-    A1: null, A2: null, A3: null, A4: null,
-    B1: null, B2: null, B3: null, B4: null,
-    C1: null, C2: null, C3: null, C4: null,
-    D1: null, D2: null, D3: null, D4: null
-  }
+  ...createEmptyImpCycleData()
 };
 
 function loadImpCycleData(tableId) {
@@ -138,21 +156,49 @@ function persistImpCycleData(tableId, data) {
 }
 
 async function recordImpResult(tableId, impForNS, supabaseClient) {
+  console.log(`[IMP] recordImpResult called: tableId=${tableId}, impForNS=${impForNS}`);
+
+  // Guard: prevent duplicate записи за една и съща раздавка
+  const storedDeal = loadDealState(tableId);
+  const dealNumberForImp = storedDeal?.dealNumber || 1;
+  const impRecordedKey = `tableImpRecorded:${tableId}:${dealNumberForImp}`;
+  if (localStorage.getItem(impRecordedKey)) {
+    console.log(`[IMP] Skipping duplicate record for deal ${dealNumberForImp}`);
+    return;
+  }
+  
   // Load current cycle data
   const stored = loadImpCycleData(tableId);
   if (stored) {
-    impCycleData = stored;
+    impCycleData = {
+      ...createEmptyImpCycleData(),
+      ...stored,
+      table: { ...createEmptyImpCycleData().table, ...(stored.table || {}) }
+    };
+  } else {
+    // Critical: if localStorage was cleared (e.g. via "Нулирай таблицата"),
+    // do NOT keep stale in-memory values. Start a fresh cycle.
+    impCycleData = createEmptyImpCycleData();
   }
+  
+  console.log(`[IMP] Current cycle data:`, JSON.stringify(impCycleData, null, 2));
   
   // Get current cell in sequence
   const gameIndex = (impCycleData.currentGame - 1) % 16;
   const cellId = impCycleSequence[gameIndex];
   
-  // Get previous value in same cell (for cumulative sum)
-  const previousValue = impCycleData.table[cellId] || 0;
+  console.log(`[IMP] Game ${impCycleData.currentGame}/16, Cell: ${cellId}`);
   
+  // Running cumulative total across the sequence:
+  // cell(n) = cell(n-1) + current deal IMP (NS perspective)
+  const previousGameIndex = gameIndex === 0 ? -1 : gameIndex - 1;
+  const previousCellId = previousGameIndex >= 0 ? impCycleSequence[previousGameIndex] : null;
+  const previousRunningTotal = previousCellId ? (impCycleData.table[previousCellId] || 0) : 0;
+
   // Store cumulative IMP (from NS perspective)
-  impCycleData.table[cellId] = previousValue + impForNS;
+  impCycleData.table[cellId] = previousRunningTotal + impForNS;
+
+  console.log(`[IMP] Cell ${cellId}: ${previousRunningTotal} + ${impForNS} = ${impCycleData.table[cellId]} (prevCell=${previousCellId || 'none'})`);
   
   const currentGameBeforeAdvance = impCycleData.currentGame;
   
@@ -171,6 +217,16 @@ async function recordImpResult(tableId, impForNS, supabaseClient) {
   
   // Persist locally
   persistImpCycleData(tableId, impCycleData);
+  console.log(`[IMP] Persisted to localStorage: tableImpCycle:${tableId}`);
+
+  // Mark this deal as recorded
+  localStorage.setItem(impRecordedKey, '1');
+  
+  // Dispatch custom event for same-tab updates (storage events don't fire in same tab)
+  window.dispatchEvent(new CustomEvent('imp-cycle-updated', { 
+    detail: { tableId, impForNS, cellId } 
+  }));
+  console.log(`[IMP] Dispatched imp-cycle-updated event`);
   
   // Update database if we have a cycle ID and Supabase client
   if (impCycleData.cycleId && supabaseClient) {
@@ -265,6 +321,28 @@ function persistDealState(tableId, dealState) {
     localStorage.setItem(`tableDealState:${tableId}`, JSON.stringify(dealState));
   } catch (err) {
     console.warn('Failed to persist deal state', err);
+  }
+}
+
+function persistLastDealNumber(tableId, dealNumberValue) {
+  try {
+    if (typeof dealNumberValue === 'number' && Number.isFinite(dealNumberValue)) {
+      localStorage.setItem(`tableLastDealNumber:${tableId}`, String(dealNumberValue));
+    }
+  } catch (err) {
+    console.warn('Failed to persist last deal number', err);
+  }
+}
+
+function loadLastDealNumber(tableId) {
+  try {
+    const raw = localStorage.getItem(`tableLastDealNumber:${tableId}`);
+    if (!raw) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  } catch (err) {
+    console.warn('Failed to load last deal number', err);
+    return null;
   }
 }
 
@@ -483,9 +561,41 @@ export const tablePage = {
   async render(container, ctx) {
     const host = document.createElement('section');
     host.innerHTML = template;
+    let persistentDealBtn = host.querySelector('[data-action="deal-cards"]');
+    let autoDealStartPending = false;
 
     const tableId = getTableId();
     currentTable.id = tableId;
+    
+    // Declare currentPlayer at top so it's accessible throughout render
+    const currentPlayer = getCurrentPlayer();
+
+    const tableTitleEl = host.querySelector('.table-header .header-left h1 span');
+    const numericTableId = Number(tableId);
+    const fallbackTitle = Number.isFinite(numericTableId)
+      ? `${ctx.t('table')} ${numericTableId}`
+      : ctx.t('table');
+
+    if (tableTitleEl) {
+      tableTitleEl.textContent = fallbackTitle;
+    }
+
+    // Load room name async (don't block rendering)
+    if (ctx.supabaseClient && tableTitleEl) {
+      ctx.supabaseClient
+        .from('rooms')
+        .select('name')
+        .eq('id', tableId)
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data?.name) {
+            tableTitleEl.textContent = data.name;
+          }
+        })
+        .catch(err => {
+          console.warn('Failed to load room name for table title', err);
+        });
+    }
     
     // Load IMP cycle data for this table
     const storedImpData = loadImpCycleData(tableId);
@@ -545,9 +655,62 @@ export const tablePage = {
 
     await loadRoomPlayers(ctx, tableId);
 
+    // Check if all 4 players are present and initialize IMP cycle
+    const allSeatsOccupied = currentTable.players.north && currentTable.players.south && 
+                             currentTable.players.east && currentTable.players.west;
+    if (allSeatsOccupied) {
+      const players = getCurrentPlayers(currentTable);
+      
+      // Check for existing cycle
+      try {
+        const existingCycle = await findExistingCycle(ctx.supabaseClient, players);
+        
+        if (existingCycle) {
+          // Load existing cycle data
+          const loadedData = dbCycleToLocal(existingCycle);
+          if (loadedData) {
+            impCycleData = loadedData;
+            persistImpCycleData(tableId, impCycleData);
+            console.log('✓ Loaded existing IMP cycle:', impCycleData.cycleNumber, 'game', impCycleData.currentGame);
+          }
+        } else {
+          // Create new cycle
+          const newCycle = await createNewCycle(ctx.supabaseClient, players, tableId);
+          if (newCycle) {
+            const createdData = dbCycleToLocal(newCycle);
+            if (createdData) {
+              impCycleData = createdData;
+              persistImpCycleData(tableId, impCycleData);
+              console.log('✓ Created new IMP cycle:', impCycleData.cycleId);
+            }
+          } else {
+            console.warn('Failed to create IMP cycle in database, using local only');
+          }
+        }
+      } catch (err) {
+        console.error('Failed to initialize IMP cycle:', err);
+      }
+    }
+    
+    // Ensure impCycleData has valid structure (fallback to default)
+    if (!impCycleData || !impCycleData.table) {
+      console.log('[IMP] Initializing default IMP cycle data');
+      impCycleData = {
+        cycleId: null,
+        cycleNumber: 1,
+        currentGame: 1,
+        table: {
+          A1: null, A2: null, A3: null, A4: null,
+          B1: null, B2: null, B3: null, B4: null,
+          C1: null, C2: null, C3: null, C4: null,
+          D1: null, D2: null, D3: null, D4: null
+        }
+      };
+      persistImpCycleData(tableId, impCycleData);
+    }
+
     try {
       // Update current table with joined player info
-      const currentPlayer = getCurrentPlayer();
       let currentUser = null;
       try {
         currentUser = JSON.parse(localStorage.getItem('currentUser'));
@@ -770,6 +933,61 @@ export const tablePage = {
       syncPlayStateToDatabase();
     };
 
+    const resetForNextDeal = () => {
+      const storedDeal = loadDealState(currentTable.id);
+      if (storedDeal?.dealNumber) {
+        persistLastDealNumber(currentTable.id, storedDeal.dealNumber);
+      }
+
+      try {
+        localStorage.removeItem(`tableReadyState:${currentTable.id}`);
+        localStorage.removeItem(`tableDealState:${currentTable.id}`);
+        localStorage.removeItem(`tableBiddingState:${currentTable.id}`);
+        localStorage.removeItem(`tableVulnerability:${currentTable.id}`);
+        localStorage.removeItem(`tablePlayState:${currentTable.id}`);
+      } catch (err) {
+        console.warn('Failed to clear round state', err);
+      }
+
+      currentDeal = null;
+      biddingState = null;
+      playState = {
+        contract: null,
+        declarer: null,
+        dummy: null,
+        openingLeader: null,
+        currentTurn: null,
+        currentTrick: [],
+        playedCounts: { north: 0, east: 0, south: 0, west: 0 },
+        firstLeadPlayed: false,
+        trickLocked: false,
+        lastTrickWinner: null,
+        tricksNS: 0,
+        tricksEW: 0,
+        inProgress: false
+      };
+      hcpScores = { north: 0, east: 0, south: 0, west: 0 };
+      viewingResults = false;
+      ['north', 'south', 'east', 'west'].forEach((seat) => {
+        playerReadyState[seat] = false;
+      });
+      persistReadyState(currentTable.id, playerReadyState);
+
+      const statusEl = host.querySelector('[data-status-text]');
+      const hourglassIcon = host.querySelector('[data-hourglass-icon]');
+      if (statusEl) statusEl.textContent = 'Waiting for dealing...';
+      if (hourglassIcon) hourglassIcon.classList.add('hourglass-spinning');
+      if (statusLine) statusLine.classList.remove('d-none');
+      if (contractPill) contractPill.classList.add('d-none');
+
+      updateContractDisplay();
+      updatePlayTurnIndicator();
+      updateActionIndicator();
+      updateTrickCounters();
+      updateVulnerabilityIndicators(host, ctx, getNextDealNumber(currentTable.id, dealNumber));
+      syncPlayStateToDatabase();
+    };
+
     const resetGameState = () => {
       clearTableState();
 
@@ -830,7 +1048,9 @@ export const tablePage = {
 
     // Initialize vulnerability indicators for current state
     const storedDeal = loadDealState(currentTable.id);
-    const currentDealNumber = storedDeal?.dealNumber || dealNumber;
+    const lastDealNumber = loadLastDealNumber(currentTable.id);
+    const currentDealNumber = storedDeal?.dealNumber || lastDealNumber || dealNumber;
+    console.log(`[Init] currentDealNumber: ${currentDealNumber} (storedDeal=${storedDeal?.dealNumber}, lastDeal=${lastDealNumber}, fallback=${dealNumber})`);
     updateVulnerabilityIndicators(host, ctx, currentDealNumber);
 
     // Hydrate ready state from storage
@@ -1120,8 +1340,8 @@ export const tablePage = {
           } else if (level === 2 && strain === 'NT') {
             // 2NT
             bonuses += 200;
-          } else if (level === 3 && (strain === 'C' || strain === 'D')) {
-            // 3 minors
+          } else if (level === 3 && strain !== 'NT') {
+            // 3 in suit (C/D/H/S)
             bonuses += 200;
           } else if (level === 4 && (strain === 'C' || strain === 'D')) {
             // 4 minors
@@ -1263,15 +1483,17 @@ export const tablePage = {
         const nsTricks = playState.tricksNS || 0;
         const ewTricks = playState.tricksEW || 0;
         const nsIsDeclarer = declarerSide === 'NS';
-        const nsBonus = nsIsDeclarer
-          ? Math.max(0, nsTricks - requiredDeclarer)
-          : Math.max(0, nsTricks - expectedDefenders);
-        const ewBonus = nsIsDeclarer
-          ? Math.max(0, ewTricks - expectedDefenders)
-          : Math.max(0, ewTricks - requiredDeclarer);
+        const nsRequired = nsIsDeclarer ? requiredDeclarer : expectedDefenders;
+        const ewRequired = nsIsDeclarer ? expectedDefenders : requiredDeclarer;
+        
+        // Show current tricks count, but format as "required + bonus" when exceeded
+        const nsBonus = Math.max(0, nsTricks - nsRequired);
+        const ewBonus = Math.max(0, ewTricks - ewRequired);
+        const nsBase = nsBonus > 0 ? nsRequired : nsTricks;
+        const ewBase = ewBonus > 0 ? ewRequired : ewTricks;
 
-        nsBadge.innerHTML = buildCounterHTML(nsTricks, nsBonus, nsIsDeclarer ? 'good' : 'bad');
-        ewBadge.innerHTML = buildCounterHTML(ewTricks, ewBonus, nsIsDeclarer ? 'bad' : 'good');
+        nsBadge.innerHTML = buildCounterHTML(nsBase, nsBonus, nsIsDeclarer ? 'good' : 'bad');
+        ewBadge.innerHTML = buildCounterHTML(ewBase, ewBonus, nsIsDeclarer ? 'bad' : 'good');
       } else {
         nsBadge.textContent = String(playState.tricksNS || 0);
         ewBadge.textContent = String(playState.tricksEW || 0);
@@ -1330,8 +1552,13 @@ export const tablePage = {
     };
 
     const showDealResults = () => {
-      if (!gameArea) return;
+      console.log('[Results] showDealResults called');
+      if (!gameArea) {
+        console.warn('[Results] gameArea is null, cannot show results');
+        return;
+      }
       
+      console.log('[Results] gameArea found, rendering results');
       // Mark that player is viewing results
       viewingResults = true;
       
@@ -1419,10 +1646,22 @@ export const tablePage = {
       // Determine IMP from NS perspective (positive if NS wins, negative if EW wins)
       const impForNS = scoreNS > scoreEW ? impValue : (scoreEW > scoreNS ? -impValue : 0);
       
-      // Record IMP result in cycle table (async, but don't wait)
-      recordImpResult(currentTable.id, impForNS, ctx.supabaseClient).catch(err => {
-        console.warn('Failed to record IMP result in database:', err);
-      });
+      // Record IMP result in cycle table - ONLY by North player to avoid duplicates
+      if (viewPosition === 'north') {
+        recordImpResult(currentTable.id, impForNS, ctx.supabaseClient).then(() => {
+          console.log('✓ IMP result recorded by North:', impForNS);
+          // Broadcast IMP update to sync all players' tables
+          if (realtimeChannel) {
+            realtimeChannel.send({
+              type: 'broadcast',
+              event: 'imp-table-updated',
+              payload: { tableId: currentTable.id }
+            });
+          }
+        }).catch(err => {
+          console.warn('Failed to record IMP result in database:', err);
+        });
+      }
       
       gameArea.innerHTML = `
         <div class="deal-results">
@@ -1586,16 +1825,22 @@ export const tablePage = {
         </div>
       `;
       
+      console.log('[Results] HTML rendered, querying Next Deal button');
       const nextBtn = gameArea.querySelector('.btn-next-deal');
+      console.log(`[Results] Next Deal button found: ${!!nextBtn}`);
       if (nextBtn) {
+        console.log('[Results] Adding click listener to Next Deal button');
         nextBtn.addEventListener('click', () => {
+          console.log('[Next Deal] Button clicked!');
           // Mark this player as ready for next deal
-          const mySeat = viewPosition;
+          const mySeat = viewerSeat;
+          console.log(`[Next Deal] mySeat=${mySeat}, viewerSeat=${viewerSeat}`);
           if (!mySeat || mySeat === 'observer') {
             console.log('Observer cannot trigger next deal');
             return;
           }
           
+          console.log(`[Next Deal] Setting ${mySeat} ready and clearing states`);
           // Set ready state for this player
           playerReadyState[mySeat] = true;
           persistReadyState(currentTable.id, playerReadyState);
@@ -1605,28 +1850,77 @@ export const tablePage = {
           
           // Clear original hands for next deal
           playState.originalHands = null;
-          
-          // Show waiting message for this player
-          gameArea.innerHTML = `
-            <div class="waiting-for-others">
-              <h2>${t('waiting_for_others')}</h2>
-              <p>${t('other_players_viewing_results')}</p>
-              <div class="hourglass-icon hourglass-spinning">
-                <i class="bi bi-hourglass-split"></i>
-              </div>
-            </div>
-          `;
+
+          // Persist last completed deal number and clear stale round state.
+          // This prevents refresh from landing on "Waiting for bidding..." from a finished deal,
+          // while preserving the ready-state needed for the next-deal coordination.
+          try {
+            const lastDeal = loadDealState(currentTable.id);
+            if (lastDeal?.dealNumber) {
+              console.log(`[Next Deal] Persisting lastDealNumber: ${lastDeal.dealNumber}`);
+              persistLastDealNumber(currentTable.id, lastDeal.dealNumber);
+            }
+            localStorage.removeItem(`tableDealState:${currentTable.id}`);
+            localStorage.removeItem(`tableBiddingState:${currentTable.id}`);
+            localStorage.removeItem(`tablePlayState:${currentTable.id}`);
+            localStorage.removeItem(`tableVulnerability:${currentTable.id}`);
+            console.log(`[Next Deal] Cleared round state (kept ready state) for table ${currentTable.id}`);
+          } catch (err) {
+            console.warn('Failed to clear stale round state after results', err);
+          }
           
           // Broadcast ready state to other players
-          if (realtimeChannel) {
-            realtimeChannel.send({
+          console.log(`[Next Deal] roomStateChannel available: ${!!roomStateChannel}`);
+          if (roomStateChannel) {
+            roomStateChannel.send({
               type: 'broadcast',
               event: 'player-ready-next-deal',
               payload: { seat: mySeat }
             });
+            console.log(`[Next Deal] Broadcast player-ready-next-deal for ${mySeat}`);
+          } else {
+            console.warn('[Next Deal] roomStateChannel is null, cannot broadcast!');
           }
           
-          console.log('Player marked ready for next deal:', mySeat);
+          console.log('Player marked ready for next deal:', mySeat, 'Current ready state:', playerReadyState);
+          
+          // Dealer should render the Deal screen immediately, others wait
+          const nextDealNumber = getNextDealNumber(currentTable.id, dealNumber);
+          const dealerSeat = getDealerSeatForDeal(nextDealNumber);
+          const isDealer = dealerSeat === mySeat;
+          
+          if (isDealer) {
+            console.log('[Next Deal] Dealer showing ready screen with Deal button');
+            // Show ready screen for dealer with visible panels and Deal button
+            const statusEl = host.querySelector('[data-status-text]');
+            const hourglassIcon = host.querySelector('[data-hourglass-icon]');
+            if (statusEl) statusEl.textContent = 'Waiting for dealing...';
+            if (hourglassIcon) hourglassIcon.classList.add('hourglass-spinning');
+            
+            // Show ready panels
+            ['north', 'south', 'west', 'east'].forEach(position => {
+              const panel = host.querySelector(`[data-player-position="${position}"]`);
+              if (panel) panel.style.display = '';
+            });
+            
+            // Clear game area
+            if (gameArea) gameArea.innerHTML = '';
+          } else {
+            console.log('[Next Deal] Non-dealer showing waiting screen');
+            // Show waiting message for non-dealer players
+            gameArea.innerHTML = `
+              <div class="waiting-for-others">
+                <h2>${t('waiting_for_others')}</h2>
+                <p>${t('other_players_viewing_results')}</p>
+                <div class="hourglass-icon hourglass-spinning">
+                  <i class="bi bi-hourglass-split"></i>
+                </div>
+              </div>
+            `;
+          }
+          
+          // Check if all players are ready to trigger auto-deal
+          checkAllPlayersReady();
         });
       }
     };
@@ -1852,8 +2146,10 @@ export const tablePage = {
                   
                   // Check if all 13 tricks have been played
                   const totalTricks = (playState.tricksNS || 0) + (playState.tricksEW || 0);
+                  console.log(`[Trick Clear] Total tricks: ${totalTricks} (NS=${playState.tricksNS}, EW=${playState.tricksEW})`);
                   if (totalTricks === 13) {
                     // Deal is complete, show results
+                    console.log('[Trick Clear] ✓ 13 tricks completed, ending game');
                     playState.inProgress = false;
                     try {
                       localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState));
@@ -1861,6 +2157,7 @@ export const tablePage = {
                       console.warn('Failed to persist playState', e);
                     }
                     broadcastPlayStateUpdate();
+                    console.log('[Trick Clear] ✓ Broadcasting end-of-game state and showing results');
                     showDealResults();
                     return;
                   }
@@ -1916,8 +2213,8 @@ export const tablePage = {
     };
 
     // Sync playState to database
-    const syncPlayStateToDatabase = async () => {
-      if (!supabaseClient || !currentTable?.id || !playState) return;
+    const syncPlayStateToDatabase = async (client = ctx.supabaseClient) => {
+      if (!client || !currentTable?.id || !playState) return;
       
       try {
         const updateData = {
@@ -1935,7 +2232,7 @@ export const tablePage = {
           status: playState.inProgress ? 'playing' : 'waiting'
         };
 
-        const { error } = await supabaseClient
+        const { error } = await client
           .from('rooms')
           .update(updateData)
           .eq('id', currentTable.id);
@@ -2058,9 +2355,10 @@ export const tablePage = {
         }
       };
 
-      const dealerSeat = seatOrder[0];
       const storedBidding = loadBiddingState(currentTable.id);
       const storedDeal = loadDealState(currentTable.id);
+      const nextDealNumber = getNextDealNumber(currentTable.id, dealNumber);
+      const dealerSeat = getDealerSeatForDeal(nextDealNumber);
 
       if (playState?.inProgress) {
         const currentTurnSeat = getCurrentTurnSeatName();
@@ -2640,7 +2938,8 @@ export const tablePage = {
       });
 
       const storedDeal = loadDealState(currentTable.id);
-      const currentDealNumber = storedDeal?.dealNumber || dealNumber;
+      const lastDealNumber = loadLastDealNumber(currentTable.id);
+      const currentDealNumber = storedDeal?.dealNumber || lastDealNumber || dealNumber;
       updateVulnerabilityIndicators(host, ctx, currentDealNumber);
     };
     
@@ -2648,8 +2947,11 @@ export const tablePage = {
     const checkAllPlayersReady = () => {
       const allReady = Object.values(playerReadyState).every((r) => r === true);
       const dealBtn = host.querySelector('[data-action="deal-cards"]');
-      const dealerSeat = seatOrder[0]; // Dealer for first round (actual seat)
+      const nextDealNumber = getNextDealNumber(currentTable.id, dealNumber);
+      const dealerSeat = getDealerSeatForDeal(nextDealNumber);
       const isDealerViewer = dealerSeat === viewerSeat;
+
+      console.log(`[Ready Check] allReady=${allReady}, nextDeal=${nextDealNumber}, dealer=${dealerSeat}, viewer=${viewerSeat}, isDealer=${isDealerViewer}, readyState=${JSON.stringify(playerReadyState)}`);
 
       if (dealBtn) {
         if (allReady && isDealerViewer) {
@@ -2659,6 +2961,29 @@ export const tablePage = {
           dealBtn.disabled = true;
           dealBtn.classList.remove('dealer-ready');
         }
+      }
+
+      if (!allReady || !isDealerViewer) {
+        autoDealStartPending = false;
+      }
+
+      if (allReady && isDealerViewer && !autoDealStartPending) {
+        autoDealStartPending = true;
+        console.log('✓ All players ready - auto-starting next deal as dealer');
+        setTimeout(() => {
+          const newDealBtn = host.querySelector('[data-action="deal-cards"]');
+          const clickableDealBtn = newDealBtn || persistentDealBtn;
+          if (!clickableDealBtn) {
+            console.warn('✗ Deal button not found in DOM');
+            autoDealStartPending = false;
+            return;
+          }
+          // Ensure click handler fires even if UI is lagging
+          if (clickableDealBtn.disabled) clickableDealBtn.disabled = false;
+          console.log('✓ Clicking deal button now');
+          clickableDealBtn.click();
+          autoDealStartPending = false;
+        }, 150);
       }
       
       // Update action-required indicator
@@ -2719,8 +3044,10 @@ export const tablePage = {
           
           // Check if deal is complete (all 13 tricks played)
           const totalTricks = (playState.tricksNS || 0) + (playState.tricksEW || 0);
+          console.log(`[Play Broadcast] Total tricks: ${totalTricks}, tricksNS=${playState.tricksNS}, tricksEW=${playState.tricksEW}, inProgress=${playState.inProgress}`);
           if (totalTricks === 13 && !playState.inProgress) {
             // Deal is complete, show results
+            console.log('[Play Broadcast] ✓ 13 tricks completed, showing results');
             showDealResults();
             return;
           }
@@ -2738,6 +3065,17 @@ export const tablePage = {
       }
     };
     window.addEventListener('storage', storageHandler);
+
+    // Same-tab IMP reset (triggered from header popup)
+    window.addEventListener('imp-cycle-reset', (event) => {
+      const tableId = event?.detail?.tableId;
+      if (!tableId || String(tableId) !== String(currentTable.id)) return;
+      console.log('✓ IMP cycle reset received (same tab)');
+      impCycleData = createEmptyImpCycleData();
+      // Note: clearTableState() should NOT be called here - IMP reset should only
+      // clear IMP data, not interrupt active gameplay. Deal/vulnerability reset is
+      // handled by header.js removing tableLastDealNumber and tableVulnerability.
+    });
 
     // Setup realtime channels
     if (ctx.supabaseClient && currentTable.id) {
@@ -2775,8 +3113,10 @@ export const tablePage = {
             
             // Check if deal is complete (all 13 tricks played)
             const totalTricks = (playState.tricksNS || 0) + (playState.tricksEW || 0);
+            console.log(`[Play Broadcast] Total tricks: ${totalTricks} (NS=${playState.tricksNS}, EW=${playState.tricksEW}), inProgress=${playState.inProgress}`);
             if (totalTricks === 13 && !playState.inProgress) {
               // Deal is complete, show results
+              console.log('[Play Broadcast] ✓ 13 tricks completed, showing results');
               showDealResults();
               return;
             }
@@ -2784,6 +3124,7 @@ export const tablePage = {
             // Re-render UI
             renderDealAndBidding();
             updateContractDisplay();
+            updateTrickCounters();
             updatePlayTurnIndicator();
             updateActionIndicator();
             if (playState.inProgress) {
@@ -2800,15 +3141,27 @@ export const tablePage = {
             window.location.reload();
           }, 150);
         })
+        .on('broadcast', { event: 'round-reset' }, (payload) => {
+          if (payload?.payload?.tableId !== currentTable.id) return;
+          console.log('✓ Round reset broadcast received');
+          resetForNextDeal();
+          renderDealAndBidding();
+        })
         .on('broadcast', { event: 'player-ready-next-deal' }, (payload) => {
           const readySeat = payload?.payload?.seat;
           if (!readySeat) return;
-          console.log('✓ Player ready for next deal:', readySeat);
+          console.log('✓ Player ready for next deal broadcast received:', readySeat);
           
           // Update ready state
           playerReadyState[readySeat] = true;
           persistReadyState(currentTable.id, playerReadyState);
           syncReadyUI();
+          
+          // Check if all players are ready to trigger auto-deal
+          // Small delay to ensure all clients have synced ready state
+          setTimeout(() => {
+            checkAllPlayersReady();
+          }, 50);
         })
         .subscribe((status) => {
           console.log('✓ Room state channel status:', status);
@@ -2894,10 +3247,17 @@ export const tablePage = {
     }
 
     // Deal button
-    const dealBtn = host.querySelector('[data-action="deal-cards"]');
+    const dealBtn = persistentDealBtn || host.querySelector('[data-action="deal-cards"]');
+    persistentDealBtn = dealBtn || persistentDealBtn;
 
     if (dealBtn) {
       dealBtn.addEventListener('click', () => {
+        // Load current deal number from storage to ensure sync
+        const nextDealNumber = getNextDealNumber(currentTable.id, dealNumber);
+        console.log(`[Deal Click] dealNumber before: ${dealNumber}, nextDealNumber from storage: ${nextDealNumber}`);
+        dealNumber = nextDealNumber;
+        console.log(`[Deal] Starting deal ${dealNumber}`);
+        
         // Reset ready state for next round
         ['north', 'south', 'east', 'west'].forEach((seat) => {
           playerReadyState[seat] = false;
@@ -2928,6 +3288,7 @@ export const tablePage = {
         };
         
         // Update vulnerability indicators for current deal
+        console.log(`[Deal] Updating vulnerability for dealNumber: ${dealNumber}`);
         updateVulnerabilityIndicators(host, ctx, dealNumber);
         
         dealNumber++;

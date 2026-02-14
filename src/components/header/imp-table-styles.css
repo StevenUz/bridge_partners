@@ -110,3 +110,25 @@
   color: #6b7280;
   font-style: italic;
 }
+
+.imp-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.imp-reset-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e8ffe0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.imp-reset-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+}

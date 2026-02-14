@@ -15,12 +15,24 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
   const navList = nav.querySelector('[data-nav-list]');
   const fullscreenBtn = nav.querySelector('[data-fullscreen-toggle]');
 
-  // Extract table id from current URL if on table or observer page
+  // Extract table id from current URL or current player if on table or observer page
   const getTableId = () => {
     const params = new URLSearchParams(window.location.search);
     const idStr = params.get('id');
-    const id = Number(idStr);
-    return Number.isFinite(id) && id > 0 ? id : 1; // Default to 1
+    
+    // Return the raw ID string (could be UUID or number)
+    if (idStr) return idStr;
+
+    try {
+      const sessionPlayer = sessionStorage.getItem('currentPlayer');
+      const localPlayer = localStorage.getItem('currentPlayer');
+      const playerData = JSON.parse(sessionPlayer || localPlayer || '{}');
+      if (playerData?.tableId) return playerData.tableId;
+    } catch (err) {
+      console.warn('Failed to read current player tableId', err);
+    }
+
+    return '1'; // Default to '1'
   };
 
   // Hide navigation links when on /table or /observer route
@@ -120,12 +132,16 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
     // Function to load and render IMP table data
     const renderImpTable = () => {
       const tableId = getTableId();
+      console.log(`[IMP Table] Rendering for tableId: ${tableId}`);
+      
       let impData = null;
       
       try {
         const raw = localStorage.getItem(`tableImpCycle:${tableId}`);
+        console.log(`[IMP Table] localStorage data:`, raw);
         if (raw) {
           impData = JSON.parse(raw);
+          console.log(`[IMP Table] Parsed data:`, impData);
         }
       } catch (e) {
         console.warn('Failed to load IMP cycle data', e);
@@ -219,9 +235,35 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
       
       gridHTML += `
         </div>
+        <div class="imp-actions">
+          <button type="button" class="imp-reset-btn" data-imp-reset>Нулирай таблицата</button>
+        </div>
       `;
       
       impTablePopup.innerHTML = gridHTML;
+
+      const resetBtn = impTablePopup.querySelector('[data-imp-reset]');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          const currentTableId = getTableId();
+          try {
+            localStorage.removeItem(`tableImpCycle:${currentTableId}`);
+            Object.keys(localStorage)
+              .filter((key) => key.startsWith(`tableImpRecorded:${currentTableId}:`))
+              .forEach((key) => localStorage.removeItem(key));
+
+            // Keep deal/vulnerability sequencing aligned with the IMP cycle after a reset.
+            localStorage.removeItem(`tableLastDealNumber:${currentTableId}`);
+            localStorage.removeItem(`tableVulnerability:${currentTableId}`);
+
+            // Notify the table page (same tab) to clear any in-memory cached IMP data.
+            window.dispatchEvent(new CustomEvent('imp-cycle-reset', { detail: { tableId: currentTableId } }));
+          } catch (err) {
+            console.warn('Failed to reset IMP table', err);
+          }
+          renderImpTable();
+        });
+      }
     };
     
     // Improved popup show/hide logic
@@ -269,6 +311,25 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
     impTableBtn.addEventListener('mouseleave', hidePopup);
     impTablePopup.addEventListener('mouseenter', cancelHide);
     impTablePopup.addEventListener('mouseleave', hidePopup);
+    
+    // Listen for IMP table updates from localStorage
+    window.addEventListener('storage', (event) => {
+      const tableId = getTableId();
+      if (event.key === `tableImpCycle:${tableId}`) {
+        console.log('IMP table updated via storage event');
+        if (isPopupVisible) {
+          renderImpTable();
+        }
+      }
+    });
+    
+    // Listen for custom IMP update events (same-tab updates)
+    window.addEventListener('imp-cycle-updated', () => {
+      console.log('IMP table updated via custom event');
+      if (isPopupVisible) {
+        renderImpTable();
+      }
+    });
   }
 
   return nav;
