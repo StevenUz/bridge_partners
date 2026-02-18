@@ -1,0 +1,470 @@
+:root {
+  --velvet-deep: #0f5d46;
+  --velvet: #157053;
+  --velvet-bright: #2d8a66;
+  --surface: #1f6b52;
+  --border: #3b8a6a;
+  --card: #1d6049;
+  --text: #f1f7f3;
+  --muted: #d3e6dc;
+  --accent-red: #c0392b;
+  --accent-black: #0e0e0e;
+}
+
+.resources-page {
+  min-height: 100vh;
+  background: radial-gradient(circle at 20% 20%, rgba(45, 138, 102, 0.35), transparent 38%),
+    radial-gradient(circle at 80% 10%, rgba(192, 57, 43, 0.16), transparent 34%),
+    linear-gradient(180deg, var(--velvet-deep) 0%, var(--velvet) 60%, var(--surface) 100%);
+  color: var(--text);
+}
+
+.resources-page h1 {
+  color: var(--text);
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.resources-page h2 {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.resources-page .lead {
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+
+/* PDF Tabs Styling */
+.pdf-tabs-wrapper {
+  margin-bottom: 2rem;
+  border-bottom: 2px solid var(--border);
+  background: var(--card);
+  border-radius: 0.75rem 0.75rem 0 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.pdf-tabs {
+  border: none;
+  padding: 0.5rem;
+  gap: 0.5rem;
+}
+
+.pdf-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem !important;
+  border: none !important;
+  border-radius: 0.5rem;
+  color: var(--muted);
+  background: rgba(31, 107, 82, 0.5);
+  font-weight: 500;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.pdf-tab-btn:hover {
+  background: var(--velvet-bright);
+  color: var(--text);
+  transform: translateY(-2px);
+}
+
+.pdf-tab-btn.active {
+  background: var(--velvet-bright);
+  color: var(--text);
+  box-shadow: 0 4px 12px rgba(45, 138, 102, 0.3);
+  border-bottom: 3px solid var(--text);
+}
+
+.pdf-tab-btn i {
+  font-size: 1.2rem;
+}
+
+/* PDF Tab Content */
+.pdf-tab-content {
+  background: var(--card);
+  padding: 2rem;
+  border-radius: 0 0 0.75rem 0.75rem;
+  min-height: 300px;
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.pdf-content-card {
+  text-align: center;
+  padding: 2rem;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pdf-preview-icon {
+  font-size: 5rem;
+  color: var(--velvet-bright);
+  margin-bottom: 1.5rem;
+  opacity: 0.9;
+}
+
+.pdf-content-card h5 {
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: 1rem;
+  font-size: 1.3rem;
+}
+
+.pdf-content-card .text-muted {
+  color: var(--muted) !important;
+  font-size: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.pdf-download-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.5rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  background-color: var(--velvet-bright);
+  color: var(--text);
+  border-color: var(--velvet-bright);
+}
+
+.pdf-download-link:hover {
+  background-color: #237b5c;
+  border-color: #237b5c;
+  color: var(--text);
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(45, 138, 102, 0.4);
+}
+
+/* Helpful Links Section */
+.helpful-link-card {
+  transition: all 0.3s ease;
+  border: 2px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--card);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.helpful-link-card:hover {
+  border-color: var(--velvet-bright);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(45, 138, 102, 0.25);
+}
+
+.helpful-link-card .card-body {
+  padding: 1.5rem;
+}
+
+.helpful-link-card .card-title {
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.helpful-link-card .card-title i {
+  color: var(--velvet-bright);
+  font-size: 1.3rem;
+}
+
+.helpful-link-card .card-text {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.helpful-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  background-color: transparent;
+  color: var(--text);
+  border: 1px solid var(--velvet-bright);
+}
+
+.helpful-link-btn:hover {
+  background-color: var(--velvet-bright);
+  border-color: var(--velvet-bright);
+  color: var(--text);
+  transform: translateX(4px);
+}
+
+  /* FAQ Modal Styling */
+  .faq-modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+  }
+
+  .faq-modal .modal-header {
+    background: var(--card);
+    border-bottom: 2px solid var(--border);
+    color: var(--text);
+  }
+
+  .faq-modal .modal-header .btn-close {
+    filter: brightness(2);
+  }
+
+  .faq-modal .modal-title {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .faq-modal .modal-body {
+    background: var(--velvet-deep);
+  }
+
+  .faq-modal .modal-footer {
+    background: var(--card);
+    border-top: 1px solid var(--border);
+  }
+
+  /* FAQ Items */
+  .faq-item {
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .faq-question {
+    cursor: pointer;
+    background: var(--card) !important;
+    color: var(--text);
+    transition: all 0.3s ease;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    user-select: none;
+  }
+
+  .faq-question:hover {
+    background: var(--velvet-bright) !important;
+    border-color: var(--velvet-bright);
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(45, 138, 102, 0.2);
+  }
+
+  .faq-question h6 {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 1rem;
+  }
+
+  .faq-icon {
+    transition: transform 0.3s ease;
+    color: var(--velvet-bright);
+    font-size: 1.1rem;
+  }
+
+  .faq-answer {
+    background: var(--card) !important;
+    border-color: var(--velvet-bright) !important;
+    color: var(--text);
+    animation: expandDown 0.3s ease;
+  }
+
+  @keyframes expandDown {
+    from {
+      opacity: 0;
+      max-height: 0;
+    }
+    to {
+      opacity: 1;
+      max-height: 500px;
+    }
+  }
+
+  .faq-answer.hidden {
+    display: none;
+  }
+
+  .faq-answer p {
+    color: var(--muted) !important;
+    line-height: 1.6;
+  }
+
+}
+
+.resource-card h5 {
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.resource-card .text-muted {
+  color: var(--muted) !important;
+  font-size: 0.95rem;
+}
+
+  /* Tutorials Modal Styling */
+  .tutorials-modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+  }
+
+  .tutorials-modal .modal-header {
+    background: var(--card);
+    border-bottom: 2px solid var(--border);
+    color: var(--text);
+  }
+
+  .tutorials-modal .modal-header .btn-close {
+    filter: brightness(2);
+  }
+
+  .tutorials-modal .modal-title {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .tutorials-modal .modal-body {
+    background: var(--velvet-deep);
+  }
+
+  .tutorials-modal .modal-footer {
+    background: var(--card);
+    border-top: 1px solid var(--border);
+  }
+
+  /* Tutorial Items */
+  .tutorial-item {
+    border-color: var(--border) !important;
+    animation: slideIn 0.3s ease;
+  }
+
+  .tutorial-item:last-child {
+    border-bottom: none !important;
+  }
+
+  .tutorial-icon {
+    width: 50px;
+    height: 50px;
+    background: var(--velvet-bright);
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text);
+    font-size: 1.5rem;
+  }
+
+  .tutorial-title {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+
+  .tutorial-description {
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  .tutorial-meta {
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
+  .tutorial-duration {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .tutorial-duration i {
+    color: var(--velvet-bright);
+  }
+
+  .tutorial-btn {
+    color: #28a745 !important;
+    border-color: #28a745 !important;
+    transition: all 0.2s ease;
+  }
+
+  .tutorial-btn:hover {
+    background-color: #28a745 !important;
+    color: var(--text) !important;
+    transform: translateX(2px);
+  }
+
+  @media (max-width: 768px) {
+    .tutorial-item {
+      padding-bottom: 1.5rem !important;
+      margin-bottom: 1.5rem !important;
+    }
+
+    .tutorial-icon {
+      width: 40px;
+      height: 40px;
+      font-size: 1.2rem;
+    }
+
+    .tutorial-title {
+      font-size: 0.95rem;
+    }
+
+    .tutorial-description {
+      font-size: 0.9rem;
+    }
+  }
+    padding-bottom: 2rem;
+  }
+
+  .pdf-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 0.5rem 0.5rem 0.5rem 0.5rem;
+  }
+
+  .pdf-tab-btn {
+    white-space: nowrap;
+    padding: 0.6rem 1rem !important;
+    font-size: 0.9rem;
+  }
+
+  .pdf-tab-btn i {
+    font-size: 1rem;
+  }
+
+  .pdf-content-card {
+    padding: 1rem;
+  }
+
+  .pdf-preview-icon {
+    font-size: 3rem;
+  }
+
+  .pdf-content-card h5 {
+    font-size: 1.1rem;
+  }
+}

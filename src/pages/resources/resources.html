@@ -1,0 +1,161 @@
+<section class="resources-page py-5">
+  <div class="container">
+    <h1 class="mb-4" data-i18n="resourcesTitle"></h1>
+    <p class="lead text-muted mb-5" data-i18n="resourcesSubtitle"></p>
+
+    <!-- PDF Documents Section with Tabs -->
+    <div class="row g-4">
+      <div class="col-12">
+        <h2 class="mb-4" data-i18n="resourcesDocuments"></h2>
+        
+        <!-- Tab Navigation -->
+        <div class="pdf-tabs-wrapper">
+          <div class="nav nav-tabs pdf-tabs" role="tablist" id="pdfTabs">
+            <button class="nav-link pdf-tab-btn active" id="pdf-tab-0" data-bs-toggle="tab" data-bs-target="#pdf-content-0" type="button" role="tab">
+              <i class="bi bi-file-pdf"></i>
+              <span>2007 Laws</span>
+            </button>
+            <button class="nav-link pdf-tab-btn" id="pdf-tab-1" data-bs-toggle="tab" data-bs-target="#pdf-content-1" type="button" role="tab">
+              <i class="bi bi-file-pdf"></i>
+              <span>Basics</span>
+            </button>
+            <button class="nav-link pdf-tab-btn" id="pdf-tab-2" data-bs-toggle="tab" data-bs-target="#pdf-content-2" type="button" role="tab">
+              <i class="bi bi-file-pdf"></i>
+              <span>Laws</span>
+            </button>
+            <button class="nav-link pdf-tab-btn" id="pdf-tab-3" data-bs-toggle="tab" data-bs-target="#pdf-content-3" type="button" role="tab">
+              <i class="bi bi-file-pdf"></i>
+              <span>Въведение</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-content pdf-tab-content" id="pdfTabContent">
+          <div class="tab-pane fade show active" id="pdf-content-0" role="tabpanel">
+            <div class="pdf-content-card">
+              <div class="pdf-preview-icon">
+                <i class="bi bi-file-pdf"></i>
+              </div>
+              <h5 class="mb-3">2007 Laws Complete (Bulgarian)</h5>
+              <p class="text-muted mb-4">Complete 2007 Laws of Bridge in Bulgarian</p>
+              <a href="#" class="btn btn-primary pdf-download-link" data-pdf-key="laws2007">
+                <i class="bi bi-download"></i> <span data-i18n="resourcesDownload"></span>
+              </a>
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="pdf-content-1" role="tabpanel">
+            <div class="pdf-content-card">
+              <div class="pdf-preview-icon">
+                <i class="bi bi-file-pdf"></i>
+              </div>
+              <h5 class="mb-3">Bridge Basics Handout</h5>
+              <p class="text-muted mb-4">Introduction to Bridge - Basics Handout</p>
+              <a href="#" class="btn btn-primary pdf-download-link" data-pdf-key="bridgeBasics">
+                <i class="bi bi-download"></i> <span data-i18n="resourcesDownload"></span>
+              </a>
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="pdf-content-2" role="tabpanel">
+            <div class="pdf-content-card">
+              <div class="pdf-preview-icon">
+                <i class="bi bi-file-pdf"></i>
+              </div>
+              <h5 class="mb-3">Laws of Bridge</h5>
+              <p class="text-muted mb-4">Laws of Bridge - Complete Rules</p>
+              <a href="#" class="btn btn-primary pdf-download-link" data-pdf-key="lawsOfBridge">
+                <i class="bi bi-download"></i> <span data-i18n="resourcesDownload"></span>
+              </a>
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="pdf-content-3" role="tabpanel">
+            <div class="pdf-content-card">
+              <div class="pdf-preview-icon">
+                <i class="bi bi-file-pdf"></i>
+              </div>
+              <h5 class="mb-3">Въведение в Спортния Бридж</h5>
+              <p class="text-muted mb-4">Introduction to Sports Bridge (Bulgarian)</p>
+              <a href="#" class="btn btn-primary pdf-download-link" data-pdf-key="introduction">
+                <i class="bi bi-download"></i> <span data-i18n="resourcesDownload"></span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Helpful Links Section -->
+      <div class="col-12 mt-5">
+        <h2 class="mb-4" data-i18n="resourcesHelpfulLinks"></h2>
+        <div class="row g-3" id="helpful-links"></div>
+      </div>
+
+      <!-- Help & Support Section -->
+      <div class="col-12 mt-5">
+        <h2 class="mb-4" data-i18n="resourcesSupport"></h2>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="card h-100 shadow-sm border-0">
+              <div class="card-body">
+                <h5 class="card-title" data-i18n="resourcesFaq"></h5>
+                <p class="card-text text-muted" data-i18n="resourcesFaqDesc"></p>
+                <button class="btn btn-outline-primary btn-sm" id="faq-btn">
+                  <i class="bi bi-chat-dots me-2"></i><span data-i18n="resourcesLearnMore"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card h-100 shadow-sm border-0">
+              <div class="card-body">
+                <h5 class="card-title" data-i18n="resourcesTutorials"></h5>
+                <p class="card-text text-muted" data-i18n="resourcesTutorialsDesc"></p>
+                <button class="btn btn-outline-primary btn-sm" id="tutorials-btn">
+                  <i class="bi bi-play-circle me-2"></i><span data-i18n="resourcesLearnMore"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tutorials Modal -->
+      <div class="modal fade" id="tutorialsModal" tabindex="-1" aria-labelledby="tutorialsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+          <div class="modal-content tutorials-modal">
+            <div class="modal-header">
+              <h5 class="modal-title" id="tutorialsModalLabel" data-i18n="resourcesTutorials"></h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="tutorials-content">
+              <!-- Tutorial items will be generated here -->
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FAQ Modal -->
+      <div class="modal fade" id="faqModal" tabindex="-1" aria-labelledby="faqModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+          <div class="modal-content faq-modal">
+            <div class="modal-header">
+              <h5 class="modal-title" id="faqModalLabel" data-i18n="resourcesFaq"></h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="faq-content">
+              <!-- FAQ items will be generated here -->
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
