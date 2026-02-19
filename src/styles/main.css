@@ -433,3 +433,44 @@ html {
   outline: 2px solid var(--velvet-bright);
   outline-offset: 2px;
 }
+
+.session-warning-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.session-warning-modal {
+  width: min(440px, 100%);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  color: var(--text);
+}
+
+.session-warning-header {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.session-warning-body {
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.session-warning-countdown {
+  margin-bottom: 12px;
+}
+
+.session-warning-actions {
+  display: flex;
+  justify-content: flex-end;
+}

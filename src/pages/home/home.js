@@ -1,6 +1,7 @@
 import template from './home.html?raw';
 import './home.css';
 import { applyTranslations, languages } from '../../i18n/i18n.js';
+import { attemptExclusiveLogin, setLoggedInUserSession } from '../../session/session-manager.js';
 
 export const homePage = {
   path: '/',
@@ -76,6 +77,29 @@ export const homePage = {
       }
 
       try {
+        const { data: existsData, error: existsError } = await ctx.supabaseClient.rpc('check_player_exists', {
+          p_username: displayName,
+          p_email: email
+        });
+
+        if (existsError) throw existsError;
+
+        const exists = existsData && existsData.length > 0 ? existsData[0] : null;
+        if (exists?.username_exists && exists?.email_exists) {
+          showRegisterError(ctx.t ? ctx.t('usernameAndEmailExist') : 'Username and email already exist');
+          return;
+        }
+
+        if (exists?.username_exists) {
+          showRegisterError(ctx.t ? ctx.t('usernameExistsOnly') : 'Username already exists');
+          return;
+        }
+
+        if (exists?.email_exists) {
+          showRegisterError(ctx.t ? ctx.t('emailExistsOnly') : 'Email already exists');
+          return;
+        }
+
         const { data, error } = await ctx.supabaseClient.rpc('register_player', {
           p_username: displayName,
           p_email: email,
@@ -95,23 +119,23 @@ export const homePage = {
           return;
         }
 
-        // Successful registration
-        try {
-          const { data: profileData } = await ctx.supabaseClient
-            .from('profiles')
-            .select('id, username, display_name')
-            .ilike('username', displayName)
-            .limit(1);
+        const profile = {
+          id: result.user_id,
+          username: result.username || displayName,
+          display_name: result.display_name || displayName
+        };
 
-          const profile = profileData && profileData.length > 0
-            ? profileData[0]
-            : { username: displayName, display_name: displayName };
+        const sessionResult = await attemptExclusiveLogin({
+          supabaseClient: ctx.supabaseClient,
+          profileId: profile.id
+        });
 
-          localStorage.setItem('currentUser', JSON.stringify(profile));
-          sessionStorage.setItem('currentUser', JSON.stringify(profile));
-        } catch (err) {
-          console.warn('Failed to persist current user', err);
+        if (!sessionResult.ok) {
+          showRegisterError(sessionResult.message || (ctx.t ? ctx.t('registrationFailed') : 'Registration failed'));
+          return;
         }
+
+        setLoggedInUserSession({ ...profile, session_id: sessionResult.sessionId });
 
         goLobby();
       } catch (error) {
@@ -121,6 +145,7 @@ export const homePage = {
 
     // Login Form Handler
     const loginError = loginForm.querySelector('#loginError');
+    const loginInfo = loginForm.querySelector('#loginInfo');
     const showLoginError = (message) => {
       loginError.textContent = message;
       loginError.classList.remove('d-none');
@@ -128,10 +153,20 @@ export const homePage = {
     const hideLoginError = () => {
       loginError.classList.add('d-none');
     };
+    const showLoginInfo = (message) => {
+      if (!loginInfo) return;
+      loginInfo.textContent = message;
+      loginInfo.classList.remove('d-none');
+    };
+    const hideLoginInfo = () => {
+      if (!loginInfo) return;
+      loginInfo.classList.add('d-none');
+    };
 
     loginForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       hideLoginError();
+      hideLoginInfo();
 
       const username = loginForm.querySelector('#loginUsername').value.trim();
       const password = loginForm.querySelector('#loginPassword').value;
@@ -160,18 +195,29 @@ export const homePage = {
 
         // Successful login
         const profile = data[0];
-        try {
-          const payload = {
-            id: profile.id,
-            username: profile.username,
-            display_name: profile.display_name
-          };
-          localStorage.setItem('currentUser', JSON.stringify(payload));
-          sessionStorage.setItem('currentUser', JSON.stringify(payload));
-        } catch (err) {
-          console.warn('Failed to persist current user', err);
+        const payload = {
+          id: profile.user_id,
+          username: profile.username,
+          display_name: profile.display_name
+        };
+
+        const sessionResult = await attemptExclusiveLogin({
+          supabaseClient: ctx.supabaseClient,
+          profileId: payload.id,
+          onWaitStatus: () => {
+            showLoginInfo(ctx.t ? ctx.t('loginPleaseWait') : 'Please wait...');
+          }
+        });
+
+        if (!sessionResult.ok) {
+          hideLoginInfo();
+          showLoginError(sessionResult.message || (ctx.t ? ctx.t('playerAlreadyIn') : 'Sorry, a player is already in'));
+          return;
         }
 
+        setLoggedInUserSession({ ...payload, session_id: sessionResult.sessionId });
+
+        hideLoginInfo();
         goLobby();
       } catch (error) {
         showLoginError(error.message || 'Login error');

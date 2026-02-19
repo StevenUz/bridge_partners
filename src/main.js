@@ -7,6 +7,7 @@ import { createFooter } from './components/footer/footer.js';
 import { createHeader } from './components/header/header.js';
 import { matchRoute } from './routes.js';
 import { routes } from './routes.js';
+import { initSessionManager } from './session/session-manager.js';
 
 const app = document.querySelector('#app');
 
@@ -157,6 +158,12 @@ window.addEventListener('popstate', () => {
 
 // Initial render
 try {
+  initSessionManager({
+    supabaseClient,
+    navigate: (path) => navigate(path),
+    t: (key) => t(state.language, key)
+  });
+
   renderHeader();
   renderPage({ skipHistory: true });
   renderFooter();
