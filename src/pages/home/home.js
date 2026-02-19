@@ -201,6 +201,16 @@ export const homePage = {
           legacyUser = Array.isArray(legacyData) ? legacyData[0] : null;
           if (legacyUser?.email) {
             email = legacyUser.email;
+          } else {
+            const { data: profileByName, error: profileByNameError } = await ctx.supabaseClient
+              .from('profiles')
+              .select('email')
+              .ilike('username', username)
+              .limit(1)
+              .maybeSingle();
+
+            if (profileByNameError) throw profileByNameError;
+            email = profileByName?.email || '';
           }
         }
 

@@ -333,18 +333,73 @@ function renderRooms(grid, rooms, ctx) {
             return;
           }
 
-          await ctx.supabaseClient
-            .from('room_members')
-            .upsert({ room_id: tableId, profile_id: profile.id, role: 'player' });
-
-          await ctx.supabaseClient
+          const { error: clearSeatError } = await ctx.supabaseClient
             .from('room_seats')
-            .upsert({
+            .delete()
+            .eq('profile_id', profile.id);
+
+          if (clearSeatError) {
+            alert(clearSeatError.message || 'Failed to clear previous seat');
+            return;
+          }
+
+          const { error: clearMemberError } = await ctx.supabaseClient
+            .from('room_members')
+            .delete()
+            .eq('profile_id', profile.id)
+            .eq('role', 'player');
+
+          if (clearMemberError) {
+            alert(clearMemberError.message || 'Failed to clear previous player membership');
+            return;
+          }
+
+          const { error: memberError } = await ctx.supabaseClient
+            .from('room_members')
+            .insert({ room_id: tableId, profile_id: profile.id, role: 'player' });
+
+          if (memberError) {
+            alert(memberError.message || 'Failed to join room as player');
+            return;
+          }
+
+          const { error: clearTargetSeatError } = await ctx.supabaseClient
+            .from('room_seats')
+            .delete()
+            .eq('room_id', tableId)
+            .eq('seat_position', seatPosition);
+
+          if (clearTargetSeatError) {
+            alert(clearTargetSeatError.message || 'Failed to clear seat');
+            return;
+          }
+
+          const { error: seatError } = await ctx.supabaseClient
+            .from('room_seats')
+            .insert({
               room_id: tableId,
               seat_position: seatPosition,
               profile_id: profile.id,
               seated_at: new Date().toISOString()
             });
+
+          if (seatError) {
+            alert(seatError.message || 'Failed to take seat');
+            return;
+          }
+
+          const { data: seatCheck, error: seatCheckError } = await ctx.supabaseClient
+            .from('room_seats')
+            .select('profile_id')
+            .eq('room_id', tableId)
+            .eq('seat_position', seatPosition)
+            .eq('profile_id', profile.id)
+            .maybeSingle();
+
+          if (seatCheckError || !seatCheck) {
+            alert(seatCheckError?.message || 'Seat was not persisted. Please try again.');
+            return;
+          }
 
           const playerName = profile.username || profile.display_name || 'Player';
           const playerPayload = {
@@ -370,9 +425,25 @@ function renderRooms(grid, rooms, ctx) {
         return;
       }
 
-      await ctx.supabaseClient
+      const { error: clearSpectatorError } = await ctx.supabaseClient
         .from('room_members')
-        .upsert({ room_id: table.id, profile_id: profile.id, role: 'spectator' }, { onConflict: 'room_id,profile_id,role' });
+        .delete()
+        .eq('profile_id', profile.id)
+        .eq('role', 'spectator');
+
+      if (clearSpectatorError) {
+        alert(clearSpectatorError.message || 'Failed to clear previous observer membership');
+        return;
+      }
+
+      const { error: spectatorError } = await ctx.supabaseClient
+        .from('room_members')
+        .insert({ room_id: table.id, profile_id: profile.id, role: 'spectator' });
+
+      if (spectatorError) {
+        alert(spectatorError.message || 'Failed to join as observer');
+        return;
+      }
 
       const observerName = profile.username || profile.display_name || 'Observer';
       const observerPayload = {

@@ -57,7 +57,15 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
           ? 'roleAuthorized'
           : 'roleUnauthorized';
 
-      roleBadge.textContent = t(language, roleLabelKey);
+      const compactRoleLabelKey = role === 'admin'
+        ? 'roleAdminShort'
+        : role === 'authorized'
+          ? 'roleAuthorizedShort'
+          : 'roleUnauthorizedShort';
+
+      const isCompactBadge = window.matchMedia('(max-width: 575.98px)').matches;
+
+      roleBadge.textContent = t(language, isCompactBadge ? compactRoleLabelKey : roleLabelKey);
       roleBadge.title = `${t(language, 'currentRole')}: ${t(language, roleLabelKey)}`;
     }
   }

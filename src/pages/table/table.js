@@ -423,6 +423,34 @@ function getCurrentPlayer() {
   return null;
 }
 
+function getCurrentUserProfileId() {
+  try {
+    const sessionUser = sessionStorage.getItem('currentUser');
+    const localUser = localStorage.getItem('currentUser');
+    const user = JSON.parse(sessionUser || localUser || 'null');
+    return user?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+async function validateCurrentPlayerSeat(ctx, roomId, currentPlayer) {
+  if (!ctx?.supabaseClient || !roomId || !currentPlayer?.seat) return false;
+
+  const currentUserId = getCurrentUserProfileId();
+  if (!currentUserId) return false;
+
+  const { data, error } = await ctx.supabaseClient
+    .from('room_seats')
+    .select('profile_id')
+    .eq('room_id', roomId)
+    .eq('seat_position', currentPlayer.seat)
+    .maybeSingle();
+
+  if (error || !data?.profile_id) return false;
+  return data.profile_id === currentUserId;
+}
+
 async function loadRoomPlayers(ctx, roomId) {
   if (!ctx?.supabaseClient || !roomId) return;
 
@@ -568,7 +596,7 @@ export const tablePage = {
     currentTable.id = tableId;
     
     // Declare currentPlayer at top so it's accessible throughout render
-    const currentPlayer = getCurrentPlayer();
+    let currentPlayer = getCurrentPlayer();
 
     const tableTitleEl = host.querySelector('.table-header .header-left h1 span');
     const numericTableId = Number(tableId);
@@ -655,6 +683,15 @@ export const tablePage = {
 
     await loadRoomPlayers(ctx, tableId);
 
+    if (currentPlayer) {
+      const hasSeat = await validateCurrentPlayerSeat(ctx, tableId, currentPlayer);
+      if (!hasSeat) {
+        localStorage.removeItem('currentPlayer');
+        sessionStorage.removeItem('currentPlayer');
+        currentPlayer = null;
+      }
+    }
+
     // Check if all 4 players are present and initialize IMP cycle
     const allSeatsOccupied = currentTable.players.north && currentTable.players.south && 
                              currentTable.players.east && currentTable.players.west;
@@ -710,21 +747,9 @@ export const tablePage = {
     }
 
     try {
-      // Update current table with joined player info
-      let currentUser = null;
-      try {
-        currentUser = JSON.parse(localStorage.getItem('currentUser'));
-      } catch (err) {
-        console.warn('Failed to read current user', err);
-      }
-
+      // Keep DB seat assignments as the only source of truth for player labels.
       if (currentPlayer) {
-        const playerName = currentPlayer.name
-          || currentUser?.username
-          || currentUser?.display_name
-          || `Player ${currentPlayer.seat.charAt(0).toUpperCase()}`;
-        currentTable.players[currentPlayer.seat] = playerName;
-        console.log(`✓ Joined table ${currentPlayer.tableId} as ${currentPlayer.seat}: ${playerName}`);
+        console.log(`✓ Viewing table ${currentPlayer.tableId} as ${currentPlayer.seat}`);
       } else {
         console.log('No current player info - viewing table as observer');
       }
