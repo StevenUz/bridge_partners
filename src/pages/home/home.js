@@ -79,7 +79,8 @@ export const homePage = {
         const { data, error } = await ctx.supabaseClient.rpc('register_player', {
           p_username: displayName,
           p_email: email,
-          p_display_name: displayName
+          p_display_name: displayName,
+          p_password: password
         });
 
         if (error) throw error;
@@ -146,11 +147,10 @@ export const homePage = {
       }
 
       try {
-        const { data, error } = await ctx.supabaseClient
-          .from('profiles')
-          .select('id, username, display_name')
-          .ilike('username', username)
-          .limit(1);
+        const { data, error } = await ctx.supabaseClient.rpc('authenticate_player', {
+          p_username: username,
+          p_password: password
+        });
 
         if (error) throw error;
         if (!data || data.length === 0) {
