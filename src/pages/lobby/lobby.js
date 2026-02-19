@@ -139,8 +139,25 @@ export const lobbyPage = {
         })
         .subscribe();
 
+      // Fallback: refresh when tab becomes visible (catches missed realtime events)
+      const onVisibilityChange = async () => {
+        if (document.visibilityState === 'visible') {
+          const fresh = await fetchRooms(ctx);
+          renderRooms(grid, fresh, ctx);
+        }
+      };
+      document.addEventListener('visibilitychange', onVisibilityChange);
+
+      // Fallback: periodic refresh every 30s
+      const pollInterval = setInterval(async () => {
+        const fresh = await fetchRooms(ctx);
+        renderRooms(grid, fresh, ctx);
+      }, 30000);
+
       return () => {
         ctx.supabaseClient.removeChannel(channel);
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+        clearInterval(pollInterval);
       };
     }
   }

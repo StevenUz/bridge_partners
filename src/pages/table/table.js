@@ -2915,7 +2915,8 @@ export const tablePage = {
         if (!panel || !seat) return;
         const btn = panel.querySelector('.player-name-button');
         if (!btn) return;
-        const name = getSeatPlayerName(seat);
+        // Use the actual player name if seated, otherwise 'Open' (same as initial render)
+        const name = currentTable.players[seat] || ctx.t('seatOpen');
         if (['west', 'east'].includes(slot)) {
           btn.innerHTML = `${positionLabels[seat]}<br>${name}`;
         } else {
