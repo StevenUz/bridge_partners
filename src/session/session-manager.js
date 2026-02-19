@@ -342,6 +342,14 @@ export async function logoutCurrentUser() {
   activeUser = null;
   clearCurrentUserStorage();
 
+  if (supabaseClientRef?.auth) {
+    try {
+      await supabaseClientRef.auth.signOut();
+    } catch (err) {
+      console.warn('supabase auth signOut failed', err);
+    }
+  }
+
   if (navigateRef) {
     navigateRef('/');
   }
@@ -362,5 +370,35 @@ export function initSessionManager({ supabaseClient, navigate, t }) {
     activeUser = stored;
     subscribeToSessionRow();
     scheduleInactivityWarning();
+  }
+
+  if (!stored?.id && supabaseClientRef?.auth) {
+    supabaseClientRef.auth.getUser().then(async ({ data, error }) => {
+      if (error || !data?.user || !supabaseClientRef) return;
+
+      const fallbackName =
+        data.user.user_metadata?.username
+        || data.user.user_metadata?.display_name
+        || (data.user.email ? data.user.email.split('@')[0] : null)
+        || `player_${data.user.id.slice(0, 8)}`;
+
+      const { data: profileData, error: profileError } = await supabaseClientRef.rpc('upsert_current_profile', {
+        p_username: fallbackName,
+        p_display_name: fallbackName
+      });
+
+      if (profileError) return;
+
+      const profile = Array.isArray(profileData) ? profileData[0] : null;
+      if (!profile?.profile_id) return;
+
+      persistCurrentUser({
+        id: profile.profile_id,
+        username: profile.username,
+        display_name: profile.display_name
+      });
+    }).catch(() => {
+      // no-op
+    });
   }
 }

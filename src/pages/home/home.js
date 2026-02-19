@@ -77,57 +77,52 @@ export const homePage = {
       }
 
       try {
-        const { data: existsData, error: existsError } = await ctx.supabaseClient.rpc('check_player_exists', {
-          p_username: displayName,
-          p_email: email
-        });
+        const { data: existingUsername } = await ctx.supabaseClient
+          .from('profiles')
+          .select('id')
+          .ilike('username', displayName)
+          .limit(1);
 
-        if (existsError) throw existsError;
-
-        const exists = existsData && existsData.length > 0 ? existsData[0] : null;
-        if (exists?.username_exists && exists?.email_exists) {
-          showRegisterError(ctx.t ? ctx.t('usernameAndEmailExist') : 'Username and email already exist');
-          return;
-        }
-
-        if (exists?.username_exists) {
+        if (existingUsername && existingUsername.length > 0) {
           showRegisterError(ctx.t ? ctx.t('usernameExistsOnly') : 'Username already exists');
           return;
         }
 
-        if (exists?.email_exists) {
-          showRegisterError(ctx.t ? ctx.t('emailExistsOnly') : 'Email already exists');
+        const { data: signUpData, error: signUpError } = await ctx.supabaseClient.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              username: displayName,
+              display_name: displayName
+            }
+          }
+        });
+
+        if (signUpError) throw signUpError;
+
+        if (!signUpData?.session) {
+          showRegisterError(ctx.t ? ctx.t('registrationFailed') : 'Registration requires email confirmation before login');
           return;
         }
 
-        const { data, error } = await ctx.supabaseClient.rpc('register_player', {
-          p_username: displayName,
-          p_email: email,
-          p_display_name: displayName,
-          p_password: password
-        });
+        const { data: profileData, error: profileError } = await ctx.supabaseClient
+          .rpc('upsert_current_profile', {
+            p_username: displayName,
+            p_display_name: displayName
+          });
 
-        if (error) throw error;
-        if (!data || data.length === 0) {
+        if (profileError) throw profileError;
+
+        const profile = Array.isArray(profileData) ? profileData[0] : null;
+        if (!profile?.profile_id) {
           showRegisterError(ctx.t ? ctx.t('registrationFailed') : 'Registration failed');
           return;
         }
 
-        const result = data[0];
-        if (result.already_exists) {
-          showRegisterError(ctx.t ? ctx.t('usernameOrEmailExists') : 'Username or email already exists');
-          return;
-        }
-
-        const profile = {
-          id: result.user_id,
-          username: result.username || displayName,
-          display_name: result.display_name || displayName
-        };
-
         const sessionResult = await attemptExclusiveLogin({
           supabaseClient: ctx.supabaseClient,
-          profileId: profile.id
+          profileId: profile.profile_id
         });
 
         if (!sessionResult.ok) {
@@ -135,7 +130,12 @@ export const homePage = {
           return;
         }
 
-        setLoggedInUserSession({ ...profile, session_id: sessionResult.sessionId });
+        setLoggedInUserSession({
+          id: profile.profile_id,
+          username: profile.username || displayName,
+          display_name: profile.display_name || displayName,
+          session_id: sessionResult.sessionId
+        });
 
         goLobby();
       } catch (error) {
@@ -182,21 +182,51 @@ export const homePage = {
       }
 
       try {
-        const { data, error } = await ctx.supabaseClient.rpc('authenticate_player', {
-          p_username: username,
-          p_password: password
-        });
+        let email = username;
 
-        if (error) throw error;
-        if (!data || data.length === 0) {
+        if (!username.includes('@')) {
+          const { data: profileByName, error: profileByNameError } = await ctx.supabaseClient
+            .from('profiles')
+            .select('email')
+            .ilike('username', username)
+            .limit(1)
+            .maybeSingle();
+
+          if (profileByNameError) throw profileByNameError;
+          email = profileByName?.email || '';
+        }
+
+        if (!email) {
           showLoginError(ctx.t ? ctx.t('invalidCredentials') : 'Invalid username or password');
           return;
         }
 
-        // Successful login
-        const profile = data[0];
+        const { error: signInError } = await ctx.supabaseClient.auth.signInWithPassword({
+          email,
+          password
+        });
+
+        if (signInError) {
+          showLoginError(ctx.t ? ctx.t('invalidCredentials') : 'Invalid username or password');
+          return;
+        }
+
+        const { data: profileData, error: profileError } = await ctx.supabaseClient
+          .rpc('upsert_current_profile', {
+            p_username: username,
+            p_display_name: username
+          });
+
+        if (profileError) throw profileError;
+
+        const profile = Array.isArray(profileData) ? profileData[0] : null;
+        if (!profile?.profile_id) {
+          showLoginError(ctx.t ? ctx.t('invalidCredentials') : 'Invalid username or password');
+          return;
+        }
+
         const payload = {
-          id: profile.user_id,
+          id: profile.profile_id,
           username: profile.username,
           display_name: profile.display_name
         };

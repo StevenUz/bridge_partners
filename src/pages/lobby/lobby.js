@@ -391,36 +391,49 @@ function renderRooms(grid, rooms, ctx) {
 }
 
 async function getCurrentProfile(ctx) {
-  let currentUser = null;
+  if (!ctx.supabaseClient) return null;
+
+  const { data: authData, error: authError } = await ctx.supabaseClient.auth.getUser();
+  if (authError || !authData?.user) {
+    return null;
+  }
+
+  const fallbackName =
+    authData.user.user_metadata?.username
+    || authData.user.user_metadata?.display_name
+    || (authData.user.email ? authData.user.email.split('@')[0] : null)
+    || `player_${authData.user.id.slice(0, 8)}`;
+
+  const { data: profileData, error: profileError } = await ctx.supabaseClient.rpc('upsert_current_profile', {
+    p_username: fallbackName,
+    p_display_name: fallbackName
+  });
+
+  if (profileError) {
+    console.warn('Failed to resolve current profile', profileError);
+    return null;
+  }
+
+  const profileRow = Array.isArray(profileData) ? profileData[0] : null;
+  if (!profileRow?.profile_id) {
+    return null;
+  }
+
+  const profile = {
+    id: profileRow.profile_id,
+    username: profileRow.username,
+    display_name: profileRow.display_name
+  };
+
   try {
-    currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    localStorage.setItem('currentUser', JSON.stringify({ ...currentUser, ...profile }));
+    sessionStorage.setItem('currentUser', JSON.stringify({ ...currentUser, ...profile }));
   } catch (err) {
-    console.warn('Failed to read current user', err);
+    console.warn('Failed to persist current user', err);
   }
 
-  if (currentUser?.id) {
-    return currentUser;
-  }
-
-  if (!currentUser?.username || !ctx.supabaseClient) return null;
-
-  const { data } = await ctx.supabaseClient
-    .from('profiles')
-    .select('id, username, display_name')
-    .ilike('username', currentUser.username)
-    .limit(1);
-
-  if (data && data.length > 0) {
-    const profile = data[0];
-    try {
-      localStorage.setItem('currentUser', JSON.stringify(profile));
-    } catch (err) {
-      console.warn('Failed to persist current user', err);
-    }
-    return profile;
-  }
-
-  return null;
+  return profile;
 }
 
 function getProfileLabel(profile) {

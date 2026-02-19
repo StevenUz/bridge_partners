@@ -24,7 +24,25 @@ const state = {
   currentRoute: matchRoute(window.location.pathname + window.location.search)
 };
 
+const PROTECTED_ROUTES = new Set(['/lobby', '/table', '/observer']);
+
 let cleanupPage = null;
+
+function isProtectedRoute(path) {
+  return PROTECTED_ROUTES.has(path);
+}
+
+async function hasValidAuthSession() {
+  if (!supabaseClient?.auth) return false;
+
+  const { data, error } = await supabaseClient.auth.getSession();
+  if (error) {
+    console.warn('Auth session check failed:', error);
+    return false;
+  }
+
+  return !!data?.session;
+}
 
 function buildContext() {
   return {
@@ -119,6 +137,15 @@ function renderFooter() {
 }
 
 async function renderPage({ skipHistory = false } = {}) {
+  if (isProtectedRoute(state.currentRoute.path)) {
+    const authenticated = await hasValidAuthSession();
+    if (!authenticated) {
+      state.currentRoute = matchRoute('/');
+      renderHeader();
+      history.replaceState({}, '', '/');
+    }
+  }
+
   if (cleanupPage) {
     cleanupPage();
     cleanupPage = null;
@@ -133,26 +160,46 @@ async function renderPage({ skipHistory = false } = {}) {
   }
 }
 
-function navigate(path) {
+async function navigate(path) {
   console.log('Navigate called with path:', path);
-  const targetRoute = matchRoute(path);
+  let targetPath = path;
+  let targetRoute = matchRoute(path);
+
+  if (isProtectedRoute(targetRoute.path)) {
+    const authenticated = await hasValidAuthSession();
+    if (!authenticated) {
+      targetPath = '/';
+      targetRoute = matchRoute('/');
+    }
+  }
+
   console.log('Target route:', targetRoute);
   
   if (state.currentRoute.path === targetRoute.path) {
-    history.pushState({}, '', path);
+    history.pushState({}, '', targetPath);
     renderPage({ skipHistory: true });
     return;
   }
 
   state.currentRoute = targetRoute;
-  history.pushState({}, '', path);
+  history.pushState({}, '', targetPath);
   renderHeader();
   renderPage({ skipHistory: true });
 }
 
-window.addEventListener('popstate', () => {
+window.addEventListener('popstate', async () => {
   const fullPath = window.location.pathname + window.location.search;
-  state.currentRoute = matchRoute(fullPath);
+  const targetRoute = matchRoute(fullPath);
+  if (isProtectedRoute(targetRoute.path)) {
+    const authenticated = await hasValidAuthSession();
+    state.currentRoute = authenticated ? targetRoute : matchRoute('/');
+    if (!authenticated) {
+      history.replaceState({}, '', '/');
+    }
+  } else {
+    state.currentRoute = targetRoute;
+  }
+
   renderHeader();
   renderPage({ skipHistory: true });
 });
