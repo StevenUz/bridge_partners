@@ -3,7 +3,7 @@ import './header.css';
 import './imp-table-styles.css';
 import { applyTranslations, languages } from '../../i18n/i18n.js';
 
-export function createHeader({ currentPath, language, onNavigate, onLanguageChange }) {
+export function createHeader({ currentPath, language, onNavigate, onLanguageChange, supabaseClient }) {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = template;
 
@@ -53,8 +53,35 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
     }
     leaveButton.style.display = 'block';
     
-    leaveButton.addEventListener('click', (event) => {
+    leaveButton.addEventListener('click', async (event) => {
       event.preventDefault();
+      
+      let currentUser = null;
+      try {
+        const storedUser = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
+        if (storedUser) {
+          currentUser = JSON.parse(storedUser);
+        }
+      } catch (parseErr) {
+        console.warn('Failed to parse currentUser from storage', parseErr);
+      }
+      
+      console.log('[Leave Table] Current user:', currentUser);
+      
+      if (currentUser?.id && supabaseClient) {
+        try {
+          console.log('[Leave Table] Calling cleanup_player_logout with profile_id:', currentUser.id);
+          const result = await supabaseClient.rpc('cleanup_player_logout', {
+            p_profile_id: currentUser.id
+          });
+          console.log('[Leave Table] Cleanup result:', result);
+        } catch (err) {
+          console.error('[Leave Table] Failed to cleanup player from table:', err);
+        }
+      } else {
+        console.warn('[Leave Table] Missing currentUser.id or supabaseClient', { userId: currentUser?.id, hasClient: !!supabaseClient });
+      }
+      
       // Clear player or observer data
       localStorage.removeItem('currentPlayer');
       localStorage.removeItem('currentObserver');

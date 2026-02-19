@@ -62,7 +62,8 @@ function renderHeader() {
     currentPath: state.currentRoute.path,
     language: state.language,
     onNavigate: (path) => navigate(path),
-    onLanguageChange: handleLanguageChange
+    onLanguageChange: handleLanguageChange,
+    supabaseClient: supabaseClient
   });
   headerHost.append(header);
   

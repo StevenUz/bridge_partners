@@ -25,7 +25,7 @@ export async function findExistingCycle(supabase, players) {
     return null;
   }
 
-  return data && data.length > 0 ? data[0] : null;
+  return data || null;
 }
 
 /**

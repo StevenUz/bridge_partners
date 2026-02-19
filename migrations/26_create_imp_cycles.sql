@@ -17,13 +17,13 @@ CREATE TABLE IF NOT EXISTS imp_cycles (
 );
 
 -- Index for finding cycles by player configuration
-CREATE INDEX idx_imp_cycles_players ON imp_cycles(player_north, player_south, player_east, player_west);
+CREATE INDEX IF NOT EXISTS idx_imp_cycles_players ON imp_cycles(player_north, player_south, player_east, player_west);
 
 -- Index for active cycles
-CREATE INDEX idx_imp_cycles_active ON imp_cycles(is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_imp_cycles_active ON imp_cycles(is_active) WHERE is_active = true;
 
 -- Index for last updated
-CREATE INDEX idx_imp_cycles_updated ON imp_cycles(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_imp_cycles_updated ON imp_cycles(updated_at DESC);
 
 -- Function to find matching cycle for 4 players
 CREATE OR REPLACE FUNCTION find_matching_imp_cycle(
@@ -64,16 +64,19 @@ $$ LANGUAGE plpgsql;
 ALTER TABLE imp_cycles ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Anyone can read active cycles
+DROP POLICY IF EXISTS "Anyone can read active imp cycles" ON imp_cycles;
 CREATE POLICY "Anyone can read active imp cycles"
   ON imp_cycles FOR SELECT
   USING (is_active = true);
 
 -- Policy: Anyone can insert new cycles
+DROP POLICY IF EXISTS "Anyone can insert imp cycles" ON imp_cycles;
 CREATE POLICY "Anyone can insert imp cycles"
   ON imp_cycles FOR INSERT
   WITH CHECK (true);
 
 -- Policy: Anyone can update cycles
+DROP POLICY IF EXISTS "Anyone can update imp cycles" ON imp_cycles;
 CREATE POLICY "Anyone can update imp cycles"
   ON imp_cycles FOR UPDATE
   USING (true);

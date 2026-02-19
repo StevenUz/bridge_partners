@@ -335,7 +335,7 @@ function renderRooms(grid, rooms, ctx) {
 
           await ctx.supabaseClient
             .from('room_members')
-            .upsert({ room_id: tableId, profile_id: profile.id, role: 'player' }, { onConflict: 'room_id,profile_id,role' });
+            .upsert({ room_id: tableId, profile_id: profile.id, role: 'player' });
 
           await ctx.supabaseClient
             .from('room_seats')
@@ -344,7 +344,7 @@ function renderRooms(grid, rooms, ctx) {
               seat_position: seatPosition,
               profile_id: profile.id,
               seated_at: new Date().toISOString()
-            }, { onConflict: 'room_id,seat_position' });
+            });
 
           const playerName = profile.username || profile.display_name || 'Player';
           const playerPayload = {
