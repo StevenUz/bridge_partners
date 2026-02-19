@@ -395,7 +395,8 @@ export function initSessionManager({ supabaseClient, navigate, t }) {
       persistCurrentUser({
         id: profile.profile_id,
         username: profile.username,
-        display_name: profile.display_name
+        display_name: profile.display_name,
+        role: profile.role
       });
     }).catch(() => {
       // no-op

@@ -422,7 +422,8 @@ async function getCurrentProfile(ctx) {
   const profile = {
     id: profileRow.profile_id,
     username: profileRow.username,
-    display_name: profileRow.display_name
+    display_name: profileRow.display_name,
+    role: profileRow.role
   };
 
   try {

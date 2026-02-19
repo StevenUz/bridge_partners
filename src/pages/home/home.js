@@ -134,6 +134,7 @@ export const homePage = {
           id: profile.profile_id,
           username: profile.username || displayName,
           display_name: profile.display_name || displayName,
+          role: profile.role,
           session_id: sessionResult.sessionId
         });
 
@@ -228,7 +229,8 @@ export const homePage = {
         const payload = {
           id: profile.profile_id,
           username: profile.username,
-          display_name: profile.display_name
+          display_name: profile.display_name,
+          role: profile.role
         };
 
         const sessionResult = await attemptExclusiveLogin({
