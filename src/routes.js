@@ -4,6 +4,7 @@ import { tablePage } from './pages/table/table.js';
 import { statisticsPage } from './pages/statistics/statistics.js';
 import { observerPage } from './pages/observer/observer.js';
 import { resourcesPage } from './pages/resources/resources.js';
+import { adminPage } from './pages/admin/admin.js';
 
 export const routes = [
   homePage,
@@ -11,7 +12,8 @@ export const routes = [
   tablePage,
   statisticsPage,
   resourcesPage,
-  observerPage
+  observerPage,
+  adminPage
 ];
 
 export function matchRoute(path) {

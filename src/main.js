@@ -25,6 +25,7 @@ const state = {
 };
 
 const PROTECTED_ROUTES = new Set(['/lobby', '/table', '/observer']);
+const ADMIN_ROUTES = new Set(['/admin']);
 
 let cleanupPage = null;
 
@@ -42,6 +43,65 @@ async function hasValidAuthSession() {
   }
 
   return !!data?.session;
+}
+
+function getStoredCurrentUser() {
+  try {
+    const sessionUser = sessionStorage.getItem('currentUser');
+    const localUser = localStorage.getItem('currentUser');
+    return JSON.parse(sessionUser || localUser || 'null');
+  } catch {
+    return null;
+  }
+}
+
+async function getCurrentUserRole() {
+  const stored = getStoredCurrentUser();
+  if (stored?.role) {
+    return stored.role;
+  }
+
+  if (!supabaseClient?.auth) {
+    return null;
+  }
+
+  const { data: authData, error: authError } = await supabaseClient.auth.getUser();
+  if (authError || !authData?.user) {
+    return null;
+  }
+
+  const fallbackName =
+    authData.user.user_metadata?.username
+    || authData.user.user_metadata?.display_name
+    || (authData.user.email ? authData.user.email.split('@')[0] : null)
+    || `player_${authData.user.id.slice(0, 8)}`;
+
+  const { data: profileData, error: profileError } = await supabaseClient.rpc('upsert_current_profile', {
+    p_username: fallbackName,
+    p_display_name: fallbackName
+  });
+
+  if (profileError) {
+    return null;
+  }
+
+  const profile = Array.isArray(profileData) ? profileData[0] : null;
+  if (!profile?.profile_id) {
+    return null;
+  }
+
+  const merged = {
+    ...(stored || {}),
+    id: profile.profile_id,
+    username: profile.username,
+    display_name: profile.display_name,
+    role: profile.role
+  };
+
+  localStorage.setItem('currentUser', JSON.stringify(merged));
+  sessionStorage.setItem('currentUser', JSON.stringify(merged));
+
+  return profile.role || null;
 }
 
 function buildContext() {
@@ -146,6 +206,15 @@ async function renderPage({ skipHistory = false } = {}) {
     }
   }
 
+  if (ADMIN_ROUTES.has(state.currentRoute.path)) {
+    const role = await getCurrentUserRole();
+    if (role !== 'admin') {
+      state.currentRoute = matchRoute('/lobby');
+      renderHeader();
+      history.replaceState({}, '', '/lobby');
+    }
+  }
+
   if (cleanupPage) {
     cleanupPage();
     cleanupPage = null;
@@ -173,6 +242,14 @@ async function navigate(path) {
     }
   }
 
+  if (ADMIN_ROUTES.has(targetRoute.path)) {
+    const role = await getCurrentUserRole();
+    if (role !== 'admin') {
+      targetPath = '/lobby';
+      targetRoute = matchRoute('/lobby');
+    }
+  }
+
   console.log('Target route:', targetRoute);
   
   if (state.currentRoute.path === targetRoute.path) {
@@ -197,7 +274,17 @@ window.addEventListener('popstate', async () => {
       history.replaceState({}, '', '/');
     }
   } else {
-    state.currentRoute = targetRoute;
+    if (ADMIN_ROUTES.has(targetRoute.path)) {
+      const role = await getCurrentUserRole();
+      if (role !== 'admin') {
+        state.currentRoute = matchRoute('/lobby');
+        history.replaceState({}, '', '/lobby');
+      } else {
+        state.currentRoute = targetRoute;
+      }
+    } else {
+      state.currentRoute = targetRoute;
+    }
   }
 
   renderHeader();

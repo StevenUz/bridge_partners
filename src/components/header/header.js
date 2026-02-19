@@ -1,7 +1,8 @@
 import template from './header.html?raw';
 import './header.css';
 import './imp-table-styles.css';
-import { applyTranslations, languages } from '../../i18n/i18n.js';
+import { applyTranslations, languages, t } from '../../i18n/i18n.js';
+import { logoutCurrentUser } from '../../session/session-manager.js';
 
 export function createHeader({ currentPath, language, onNavigate, onLanguageChange, supabaseClient }) {
   const wrapper = document.createElement('div');
@@ -14,6 +15,66 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
   const brand = nav.querySelector('[data-brand]');
   const navList = nav.querySelector('[data-nav-list]');
   const fullscreenBtn = nav.querySelector('[data-fullscreen-toggle]');
+  const adminNavItem = nav.querySelector('[data-admin-only]');
+  const roleBadge = nav.querySelector('[data-user-role-badge]');
+  const logoutBtn = nav.querySelector('[data-action="logout"]');
+
+  let currentUser = null;
+  try {
+    const rawCurrentUser = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
+    currentUser = rawCurrentUser ? JSON.parse(rawCurrentUser) : null;
+  } catch (err) {
+    console.warn('Failed to parse current user for admin nav visibility', err);
+  }
+
+  if (adminNavItem) {
+    if (currentUser?.role === 'admin') {
+      adminNavItem.classList.remove('d-none');
+    } else {
+      adminNavItem.classList.add('d-none');
+    }
+  }
+
+  if (roleBadge) {
+    const role = currentUser?.role;
+    if (!role) {
+      roleBadge.classList.add('d-none');
+    } else {
+      roleBadge.classList.remove('d-none');
+      roleBadge.classList.remove('bg-danger', 'bg-success', 'bg-warning', 'text-dark');
+
+      if (role === 'admin') {
+        roleBadge.classList.add('bg-danger');
+      } else if (role === 'authorized') {
+        roleBadge.classList.add('bg-success');
+      } else {
+        roleBadge.classList.add('bg-warning', 'text-dark');
+      }
+
+      const roleLabelKey = role === 'admin'
+        ? 'roleAdmin'
+        : role === 'authorized'
+          ? 'roleAuthorized'
+          : 'roleUnauthorized';
+
+      roleBadge.textContent = t(language, roleLabelKey);
+      roleBadge.title = `${t(language, 'currentRole')}: ${t(language, roleLabelKey)}`;
+    }
+  }
+
+  if (logoutBtn) {
+    if (currentUser?.id) {
+      logoutBtn.classList.remove('d-none');
+    } else {
+      logoutBtn.classList.add('d-none');
+    }
+
+    logoutBtn.addEventListener('click', async (event) => {
+      event.preventDefault();
+      await logoutCurrentUser();
+      collapse.classList.remove('show');
+    });
+  }
 
   // Extract table id from current URL or current player if on table or observer page
   const getTableId = () => {

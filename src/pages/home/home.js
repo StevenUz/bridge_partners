@@ -130,6 +130,10 @@ export const homePage = {
           return;
         }
 
+        await ctx.supabaseClient.rpc('cleanup_player_logout', {
+          p_profile_id: profile.profile_id
+        });
+
         setLoggedInUserSession({
           id: profile.profile_id,
           username: profile.username || displayName,
@@ -184,17 +188,20 @@ export const homePage = {
 
       try {
         let email = username;
+        let legacyUser = null;
 
         if (!username.includes('@')) {
-          const { data: profileByName, error: profileByNameError } = await ctx.supabaseClient
-            .from('profiles')
-            .select('email')
-            .ilike('username', username)
-            .limit(1)
-            .maybeSingle();
+          const { data: legacyData, error: legacyError } = await ctx.supabaseClient.rpc('legacy_authenticate_player', {
+            p_username: username,
+            p_password: password
+          });
 
-          if (profileByNameError) throw profileByNameError;
-          email = profileByName?.email || '';
+          if (legacyError) throw legacyError;
+
+          legacyUser = Array.isArray(legacyData) ? legacyData[0] : null;
+          if (legacyUser?.email) {
+            email = legacyUser.email;
+          }
         }
 
         if (!email) {
@@ -202,10 +209,30 @@ export const homePage = {
           return;
         }
 
-        const { error: signInError } = await ctx.supabaseClient.auth.signInWithPassword({
+        let { error: signInError } = await ctx.supabaseClient.auth.signInWithPassword({
           email,
           password
         });
+
+        if (signInError && legacyUser && !legacyUser.has_auth_user) {
+          const { error: signUpError } = await ctx.supabaseClient.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                username: legacyUser.username || username,
+                display_name: legacyUser.display_name || legacyUser.username || username
+              }
+            }
+          });
+
+          if (signUpError && !String(signUpError.message || '').toLowerCase().includes('already registered')) {
+            throw signUpError;
+          }
+
+          const retry = await ctx.supabaseClient.auth.signInWithPassword({ email, password });
+          signInError = retry.error;
+        }
 
         if (signInError) {
           showLoginError(ctx.t ? ctx.t('invalidCredentials') : 'Invalid username or password');
@@ -246,6 +273,10 @@ export const homePage = {
           showLoginError(sessionResult.message || (ctx.t ? ctx.t('playerAlreadyIn') : 'Sorry, a player is already in'));
           return;
         }
+
+        await ctx.supabaseClient.rpc('cleanup_player_logout', {
+          p_profile_id: payload.id
+        });
 
         setLoggedInUserSession({ ...payload, session_id: sessionResult.sessionId });
 
