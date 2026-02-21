@@ -2850,6 +2850,14 @@ export const tablePage = {
 
           commitState();
           persistBiddingState(currentTable.id, biddingState);
+          // Broadcast bidding update to other devices
+          if (roomStateChannel) {
+            roomStateChannel.send({
+              type: 'broadcast',
+              event: 'bidding-update',
+              payload: { ...biddingState }
+            }).catch(err => console.warn('Failed to broadcast bid', err));
+          }
           renderHistory();
           updateButtons();
           updateTurnIndicator();
@@ -3168,16 +3176,20 @@ export const tablePage = {
           updateSeatLabels();
           // Keep localStorage in sync so polling interval won't overwrite DB-sourced state
           persistReadyState(currentTable.id, playerReadyState);
-          // Sync ready toggles in UI from playerReadyState (populated by loadRoomPlayers from DB)
-          const toggles = host.querySelectorAll('[data-ready-toggle]');
-          toggles.forEach((tg) => {
-            const s = tg.getAttribute('data-ready-toggle');
-            if (s) {
-              if (playerReadyState[s]) tg.classList.add('enabled');
-              else tg.classList.remove('enabled');
-            }
-          });
-          checkAllPlayersReady();
+          // Only sync ready UI if no deal is currently active — avoid showing
+          // not-ready toggles when is_ready is reset at deal start
+          const activeDeal = loadDealState(currentTable.id);
+          if (!activeDeal) {
+            const toggles = host.querySelectorAll('[data-ready-toggle]');
+            toggles.forEach((tg) => {
+              const s = tg.getAttribute('data-ready-toggle');
+              if (s) {
+                if (playerReadyState[s]) tg.classList.add('enabled');
+                else tg.classList.remove('enabled');
+              }
+            });
+            checkAllPlayersReady();
+          }
         })
         .subscribe();
       
@@ -3239,6 +3251,24 @@ export const tablePage = {
           if (payload?.payload?.tableId !== currentTable.id) return;
           console.log('✓ Round reset broadcast received');
           resetForNextDeal();
+          renderDealAndBidding();
+        })
+        .on('broadcast', { event: 'deal-started' }, (payload) => {
+          if (!payload?.payload) return;
+          console.log('✓ Deal started broadcast received');
+          // Persist to localStorage so renderDealAndBidding can read it
+          persistDealState(currentTable.id, payload.payload);
+          // Also update in-memory hcpScores
+          if (payload.payload.hcpScores) {
+            hcpScores = payload.payload.hcpScores;
+          }
+          renderDealAndBidding();
+        })
+        .on('broadcast', { event: 'bidding-update' }, (payload) => {
+          if (!payload?.payload) return;
+          console.log('✓ Bidding update broadcast received:', payload.payload);
+          persistBiddingState(currentTable.id, payload.payload);
+          // Re-render to show updated bidding history and turn
           renderDealAndBidding();
         })
         .on('broadcast', { event: 'player-ready-toggle' }, (payload) => {
@@ -3414,7 +3444,7 @@ export const tablePage = {
         dealNumber++;
         
         // Persist deal state for other tabs to sync
-        persistDealState(currentTable.id, {
+        const dealPayload = {
           dealNumber: currentDeal.dealNumber,
           hands: currentDeal.hands,
           isEvenDeal: currentDeal.isEvenDeal,
@@ -3423,7 +3453,16 @@ export const tablePage = {
           hcpEW,
           fitsNS,
           fitsEW
-        });
+        };
+        persistDealState(currentTable.id, dealPayload);
+        // Broadcast to other devices — they have no shared localStorage
+        if (roomStateChannel) {
+          roomStateChannel.send({
+            type: 'broadcast',
+            event: 'deal-started',
+            payload: dealPayload
+          }).catch(err => console.warn('Failed to broadcast deal-started', err));
+        }
         
         // Update status to bidding and start hourglass animation
         const statusEl = host.querySelector('[data-status-text]');
@@ -3706,6 +3745,14 @@ export const tablePage = {
 
           commitState();
           persistBiddingState(currentTable.id, biddingState);
+          // Broadcast bidding update to other devices
+          if (roomStateChannel) {
+            roomStateChannel.send({
+              type: 'broadcast',
+              event: 'bidding-update',
+              payload: { ...biddingState }
+            }).catch(err => console.warn('Failed to broadcast bid', err));
+          }
           renderHistory();
           updateButtons();
           updateTurnIndicator();
