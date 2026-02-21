@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 
 type RequestBody = {
-  action?: 'change_password';
+  action?: 'change_password' | 'delete_user';
   profile_id?: string;
   new_password?: string;
 };
@@ -63,15 +63,79 @@ Deno.serve(async (req: Request) => {
 
     const body = (await req.json()) as RequestBody;
 
-    if (body.action !== 'change_password') {
+    if (body.action !== 'change_password' && body.action !== 'delete_user') {
       return new Response(JSON.stringify({ ok: false, error: 'Unsupported action' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    if (!body.profile_id || !body.new_password) {
-      return new Response(JSON.stringify({ ok: false, error: 'profile_id and new_password are required' }), {
+    if (!body.profile_id) {
+      return new Response(JSON.stringify({ ok: false, error: 'profile_id is required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // ── DELETE USER ──────────────────────────────────────────────────────────
+    if (body.action === 'delete_user') {
+      // Prevent admin from deleting themselves
+      if (callerProfile.id === body.profile_id) {
+        return new Response(JSON.stringify({ ok: false, error: 'You cannot delete your own account' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const { data: targetProfile, error: targetError } = await adminClient
+        .from('profiles')
+        .select('id, auth_user_id, username')
+        .eq('id', body.profile_id)
+        .maybeSingle();
+
+      if (targetError || !targetProfile) {
+        return new Response(JSON.stringify({ ok: false, error: 'Target user not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 1. Purge all profile data (stats, seats, sessions, chat, etc.)
+      const { error: rpcError } = await adminClient.rpc('admin_delete_player', {
+        p_profile_id: body.profile_id
+      });
+
+      if (rpcError) {
+        return new Response(JSON.stringify({ ok: false, error: rpcError.message || 'Failed to delete player data' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 2. Remove the auth user (triggers cascade deletion of profile if still present)
+      if (targetProfile.auth_user_id) {
+        const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(
+          targetProfile.auth_user_id
+        );
+
+        if (authDeleteError) {
+          return new Response(JSON.stringify({ ok: false, error: authDeleteError.message || 'Failed to delete auth user' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ ok: true, deleted: targetProfile.username }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ── CHANGE PASSWORD ──────────────────────────────────────────────────────
+
+    if (!body.new_password) {
+      return new Response(JSON.stringify({ ok: false, error: 'new_password is required for change_password action' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });

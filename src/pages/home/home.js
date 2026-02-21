@@ -20,7 +20,13 @@ export const homePage = {
 
     applyTranslations(host, ctx.language);
 
-    const goLobby = () => ctx.navigate('/resources');
+    const goAfterAuth = (role) => {
+      if (role === 'authorized' || role === 'admin') {
+        ctx.navigate('/lobby');
+      } else {
+        ctx.navigate('/resources');
+      }
+    };
 
     // Toggle between forms
     showSignupBtn.addEventListener('click', () => {
@@ -142,7 +148,7 @@ export const homePage = {
           session_id: sessionResult.sessionId
         });
 
-        goLobby();
+        goAfterAuth(profile.role);
       } catch (error) {
         showRegisterError(error.message || 'Registration error');
       }
@@ -291,7 +297,7 @@ export const homePage = {
         setLoggedInUserSession({ ...payload, session_id: sessionResult.sessionId });
 
         hideLoginInfo();
-        goLobby();
+        goAfterAuth(payload.role);
       } catch (error) {
         showLoginError(error.message || 'Login error');
       }

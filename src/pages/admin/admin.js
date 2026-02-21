@@ -46,6 +46,12 @@ export const adminPage = {
       return;
     }
 
+    const getAuthHeaders = async () => {
+      const { data: { session } } = await ctx.supabaseClient.auth.getSession();
+      const token = session?.access_token;
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    };
+
     const loadUsers = async () => {
       hideMessages();
 
@@ -64,6 +70,7 @@ export const adminPage = {
       (data || []).forEach((user) => {
         const row = document.createElement('tr');
         const canAuthorize = user.role === 'unauthorized';
+        const isSelf = currentUser?.id === user.id;
 
         row.innerHTML = `
           <td>${user.username || ''}</td>
@@ -79,6 +86,9 @@ export const adminPage = {
                 <input type="password" class="form-control form-control-sm" minlength="6" placeholder="New password" data-action="password" />
                 <button class="btn btn-sm btn-primary" data-action="set-password">Set password</button>
               </div>
+              <button class="btn btn-sm btn-danger" data-action="delete-user" ${isSelf ? 'disabled title="Cannot delete your own account"' : ''}>
+                <i class="bi bi-trash me-1"></i>Delete user
+              </button>
             </div>
           </td>
         `;
@@ -117,7 +127,8 @@ export const adminPage = {
               action: 'change_password',
               profile_id: user.id,
               new_password: newPassword
-            }
+            },
+            headers: await getAuthHeaders()
           });
 
           if (fnError) {
@@ -132,6 +143,27 @@ export const adminPage = {
 
           passwordInput.value = '';
           showSuccess(`Password updated for ${user.username}.`);
+        });
+
+        const deleteBtn = row.querySelector('[data-action="delete-user"]');
+        deleteBtn?.addEventListener('click', async () => {
+          hideMessages();
+          const confirmed = window.confirm(
+            `Are you sure you want to permanently delete "${user.username}"?\n\nThis will remove all their data including statistics and cannot be undone.`
+          );
+          if (!confirmed) return;
+
+          const { error: rpcError } = await ctx.supabaseClient.rpc('admin_delete_player', {
+            p_profile_id: user.id
+          });
+
+          if (rpcError) {
+            showError(rpcError.message || 'Delete failed');
+            return;
+          }
+
+          showSuccess(`User "${user.username}" has been permanently deleted.`);
+          await loadUsers();
         });
 
         usersBody.append(row);
