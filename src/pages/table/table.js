@@ -2942,6 +2942,14 @@ export const tablePage = {
             playerReadyState[seat] = true;
           }
           persistReadyState(currentTable.id, playerReadyState);
+          // Broadcast ready state change to other devices via Supabase Realtime
+          if (roomStateChannel) {
+            roomStateChannel.send({
+              type: 'broadcast',
+              event: 'player-ready-toggle',
+              payload: { seat, isReady: playerReadyState[seat] }
+            }).catch(err => console.warn('Failed to broadcast ready toggle', err));
+          }
           checkAllPlayersReady();
         });
       }
@@ -3186,6 +3194,22 @@ export const tablePage = {
           console.log('✓ Round reset broadcast received');
           resetForNextDeal();
           renderDealAndBidding();
+        })
+        .on('broadcast', { event: 'player-ready-toggle' }, (payload) => {
+          const readySeat = payload?.payload?.seat;
+          const isReady = payload?.payload?.isReady;
+          if (!readySeat || typeof isReady !== 'boolean') return;
+          console.log(`✓ Player ready toggle broadcast received: ${readySeat} = ${isReady}`);
+
+          // Update ready state
+          playerReadyState[readySeat] = isReady;
+          persistReadyState(currentTable.id, playerReadyState);
+          syncReadyUI();
+
+          // Check if all players are ready to trigger auto-deal
+          setTimeout(() => {
+            checkAllPlayersReady();
+          }, 50);
         })
         .on('broadcast', { event: 'player-ready-next-deal' }, (payload) => {
           const readySeat = payload?.payload?.seat;
