@@ -9,6 +9,7 @@ import {
   findExistingCycle, 
   createNewCycle, 
   updateCycleAfterDeal, 
+  resetCyclesForPartnership,
   getCurrentPlayers,
   dbCycleToLocal 
 } from '../../bridge/imp-cycle.js';
@@ -207,14 +208,17 @@ async function recordImpResult(tableId, impForNS, supabaseClient) {
   // Advance to next game
   impCycleData.currentGame++;
   
-  // Check if cycle completed
+  // Check if cycle completed (16 games done)
   if (impCycleData.currentGame > 16) {
     impCycleData.cycleNumber++;
     impCycleData.currentGame = 1;
-    // Reset table for new cycle
+    // Reset table data for the new cycle
     Object.keys(impCycleData.table).forEach(key => {
       impCycleData.table[key] = null;
     });
+    // Detach from the completed DB cycle so next session creates a fresh one.
+    // (updateCycleAfterDeal will mark the DB record is_active=false below.)
+    impCycleData.cycleId = null;
   }
   
   // Persist locally
@@ -3097,15 +3101,14 @@ export const tablePage = {
       console.log('✓ IMP cycle reset received (same tab)');
       // Reset in-memory deal counter so dealer starts from South (deal 1)
       dealNumber = 1;
-      // Deactivate the current DB cycle so a fresh one is created on next load
-      if (impCycleData.cycleId && ctx.supabaseClient) {
-        ctx.supabaseClient
-          .from('imp_cycles')
-          .update({ is_active: false, updated_at: new Date().toISOString() })
-          .eq('id', impCycleData.cycleId)
-          .then(({ error }) => {
-            if (error) console.warn('Failed to deactivate IMP cycle in DB:', error);
-            else console.log('✓ IMP cycle deactivated in DB');
+      // Delete ALL cycles for this partnership combo so the next session
+      // (whether same or swapped partners) starts completely fresh.
+      const players = getCurrentPlayers(currentTable);
+      if (players && ctx.supabaseClient) {
+        resetCyclesForPartnership(ctx.supabaseClient, players)
+          .then(ok => {
+            if (ok) console.log('✓ All IMP cycles for partnership deleted from DB');
+            else    console.warn('Failed to delete IMP cycles for partnership');
           });
       }
       impCycleData = createEmptyImpCycleData();

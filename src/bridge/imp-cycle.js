@@ -113,24 +113,24 @@ export async function updateCycleAfterDeal(supabase, cycleId, impForNS, currentG
 }
 
 /**
- * Deactivate cycle when a player leaves
+ * Reset (delete) ALL cycles for a partnership combo.
+ * Called on manual "Reset table" so the next session starts completely fresh.
  * @param {Object} supabase - Supabase client
- * @param {string} cycleId - Cycle UUID
- * @returns {Promise<boolean>} - Success status
+ * @param {Object} players  - { north, south, east, west } player names
+ * @returns {Promise<boolean>}
  */
-export async function deactivateCycle(supabase, cycleId) {
-  if (!supabase || !cycleId) return false;
+export async function resetCyclesForPartnership(supabase, players) {
+  if (!supabase || !players?.north) return false;
 
-  const { error } = await supabase
-    .from('imp_cycles')
-    .update({
-      is_active: false,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', cycleId);
+  const { error } = await supabase.rpc('reset_imp_cycles_for_partnership', {
+    p_north: players.north,
+    p_south: players.south,
+    p_east:  players.east,
+    p_west:  players.west
+  });
 
   if (error) {
-    console.error('Error deactivating cycle:', error);
+    console.error('Error resetting cycles for partnership:', error);
     return false;
   }
 
