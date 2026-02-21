@@ -612,20 +612,27 @@ export const tablePage = {
       tableTitleEl.textContent = fallbackTitle;
     }
 
-    // Load room name async (don't block rendering)
+    // Load room name + initial game state async (don't block rendering)
     if (ctx.supabaseClient && tableTitleEl) {
       ctx.supabaseClient
         .from('rooms')
-        .select('name')
+        .select('name, game_phase, deal_data')
         .eq('id', tableId)
         .single()
         .then(({ data, error }) => {
-          if (!error && data?.name) {
-            tableTitleEl.textContent = data.name;
+          if (error) { console.warn('Failed to load room state', error); return; }
+          if (data?.name) tableTitleEl.textContent = data.name;
+          // Restore game phase and deal data (for clients joining mid-game)
+          if (data?.game_phase) currentGamePhase = data.game_phase;
+          if (data?.game_phase === 'dealing' && data?.deal_data) {
+            persistDealState(tableId, data.deal_data);
+            if (data.deal_data.hcpScores) hcpScores = data.deal_data.hcpScores;
+            console.log('✓ Loaded active deal from DB on page load');
+            renderDealAndBidding();
           }
         })
         .catch(err => {
-          console.warn('Failed to load room name for table title', err);
+          console.warn('Failed to load room state for table', err);
         });
     }
     
@@ -638,6 +645,9 @@ export const tablePage = {
     // Declare channels at top level for access in functions
     let realtimeChannel = null;
     let roomStateChannel = null;
+    // Local mirror of rooms.game_phase — used to avoid race conditions
+    // between is_ready reset and deal data arriving on remote clients
+    let currentGamePhase = 'waiting';
 
     const storedPlayState = loadPlayState(currentTable.id);
     if (storedPlayState) {
@@ -950,14 +960,22 @@ export const tablePage = {
         playerReadyState[seat] = false;
       });
       persistReadyState(currentTable.id, playerReadyState);
-      // Reset is_ready in DB
+      // Reset game phase in rooms + is_ready in room_seats
+      currentGamePhase = 'waiting';
       if (ctx.supabaseClient && currentTable.id) {
         ctx.supabaseClient
-          .from('room_seats')
-          .update({ is_ready: false })
-          .eq('room_id', currentTable.id)
+          .from('rooms')
+          .update({ game_phase: 'waiting', deal_data: null })
+          .eq('id', currentTable.id)
           .then(({ error }) => {
-            if (error) console.warn('Failed to reset is_ready in DB (clearTableState)', error);
+            if (error) console.warn('Failed to reset rooms game_phase (clearTableState)', error);
+            return ctx.supabaseClient
+              .from('room_seats')
+              .update({ is_ready: false })
+              .eq('room_id', currentTable.id);
+          })
+          .then(({ error } = {}) => {
+            if (error) console.warn('Failed to reset is_ready (clearTableState)', error);
           });
       }
 
@@ -1018,14 +1036,22 @@ export const tablePage = {
         playerReadyState[seat] = false;
       });
       persistReadyState(currentTable.id, playerReadyState);
-      // Reset is_ready in DB
+      // Reset game phase in rooms + is_ready in room_seats
+      currentGamePhase = 'waiting';
       if (ctx.supabaseClient && currentTable.id) {
         ctx.supabaseClient
-          .from('room_seats')
-          .update({ is_ready: false })
-          .eq('room_id', currentTable.id)
+          .from('rooms')
+          .update({ game_phase: 'waiting', deal_data: null })
+          .eq('id', currentTable.id)
           .then(({ error }) => {
-            if (error) console.warn('Failed to reset is_ready in DB (resetForNextDeal)', error);
+            if (error) console.warn('Failed to reset rooms game_phase (resetForNextDeal)', error);
+            return ctx.supabaseClient
+              .from('room_seats')
+              .update({ is_ready: false })
+              .eq('room_id', currentTable.id);
+          })
+          .then(({ error } = {}) => {
+            if (error) console.warn('Failed to reset is_ready (resetForNextDeal)', error);
           });
       }
 
@@ -3171,15 +3197,27 @@ export const tablePage = {
     if (ctx.supabaseClient && currentTable.id) {
       realtimeChannel = ctx.supabaseClient
         .channel(`table-seats-${currentTable.id}`)
+        // PRIMARY deal distribution: rooms table carries game_phase + deal_data
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${currentTable.id}` }, (payload) => {
+          const room = payload.new;
+          currentGamePhase = room.game_phase || 'waiting';
+          console.log(`[Rooms change] game_phase=${currentGamePhase}`);
+          if (currentGamePhase === 'dealing' && room.deal_data) {
+            // Persist deal data so renderDealAndBidding can read it
+            persistDealState(currentTable.id, room.deal_data);
+            if (room.deal_data.hcpScores) hcpScores = room.deal_data.hcpScores;
+            console.log('✓ Deal data received via DB, rendering...');
+            renderDealAndBidding();
+          }
+        })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'room_seats', filter: `room_id=eq.${currentTable.id}` }, async () => {
           await loadRoomPlayers(ctx, currentTable.id);
           updateSeatLabels();
           // Keep localStorage in sync so polling interval won't overwrite DB-sourced state
           persistReadyState(currentTable.id, playerReadyState);
-          // Only sync ready UI if no deal is currently active — avoid showing
-          // not-ready toggles when is_ready is reset at deal start
-          const activeDeal = loadDealState(currentTable.id);
-          if (!activeDeal) {
+          // Only sync ready UI when in 'waiting' phase — avoids flash of not-ready
+          // caused by is_ready=false reset that happens when deal starts
+          if (currentGamePhase === 'waiting') {
             const toggles = host.querySelectorAll('[data-ready-toggle]');
             toggles.forEach((tg) => {
               const s = tg.getAttribute('data-ready-toggle');
@@ -3398,23 +3436,13 @@ export const tablePage = {
         dealNumber = nextDealNumber;
         console.log(`[Deal] Starting deal ${dealNumber}`);
         
-        // Reset ready state for next round
+        // Reset ready state locally (in memory + localStorage)
         ['north', 'south', 'east', 'west'].forEach((seat) => {
           playerReadyState[seat] = false;
         });
         persistReadyState(currentTable.id, playerReadyState);
         const readyToggles = host.querySelectorAll('.toggle-switch');
         readyToggles.forEach((tg) => tg.classList.remove('enabled'));
-        // Reset is_ready in DB so other devices see correct state
-        if (ctx.supabaseClient && currentTable.id) {
-          ctx.supabaseClient
-            .from('room_seats')
-            .update({ is_ready: false })
-            .eq('room_id', currentTable.id)
-            .then(({ error }) => {
-              if (error) console.warn('Failed to reset is_ready in DB', error);
-            });
-        }
 
         currentDeal = dealCards(dealNumber);
         // Calculate HCP for all hands and store for the current deal
@@ -3455,7 +3483,30 @@ export const tablePage = {
           fitsEW
         };
         persistDealState(currentTable.id, dealPayload);
-        // Broadcast to other devices — they have no shared localStorage
+        // PRIMARY cross-device sync: write deal to rooms table.
+        // postgres_changes fires on all devices with the full deal_data payload.
+        // is_ready is reset in room_seats AFTER rooms is updated, so remote
+        // clients already have currentGamePhase='dealing' and will ignore the
+        // is_ready change.
+        currentGamePhase = 'dealing';
+        if (ctx.supabaseClient && currentTable.id) {
+          ctx.supabaseClient
+            .from('rooms')
+            .update({ game_phase: 'dealing', deal_data: dealPayload })
+            .eq('id', currentTable.id)
+            .then(({ error }) => {
+              if (error) console.warn('Failed to write deal to rooms table', error);
+              // Reset is_ready AFTER rooms update is committed
+              return ctx.supabaseClient
+                .from('room_seats')
+                .update({ is_ready: false })
+                .eq('room_id', currentTable.id);
+            })
+            .then(({ error } = {}) => {
+              if (error) console.warn('Failed to reset is_ready after deal', error);
+            });
+        }
+        // Fallback broadcast for any clients that miss postgres_changes
         if (roomStateChannel) {
           roomStateChannel.send({
             type: 'broadcast',
