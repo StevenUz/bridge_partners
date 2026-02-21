@@ -86,6 +86,9 @@ export const adminPage = {
                 <input type="password" class="form-control form-control-sm" minlength="6" placeholder="New password" data-action="password" />
                 <button class="btn btn-sm btn-primary" data-action="set-password">Set password</button>
               </div>
+              <button class="btn btn-sm btn-warning" data-action="reset-stats">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>Reset stats
+              </button>
               <button class="btn btn-sm btn-danger" data-action="delete-user" ${isSelf ? 'disabled title="Cannot delete your own account"' : ''}>
                 <i class="bi bi-trash me-1"></i>Delete user
               </button>
@@ -143,6 +146,26 @@ export const adminPage = {
 
           passwordInput.value = '';
           showSuccess(`Password updated for ${user.username}.`);
+        });
+
+        const resetStatsBtn = row.querySelector('[data-action="reset-stats"]');
+        resetStatsBtn?.addEventListener('click', async () => {
+          hideMessages();
+          const confirmed = window.confirm(
+            `Reset all statistics for "${user.username}"?\n\nAll scores, game counts and contract results will be zeroed out.`
+          );
+          if (!confirmed) return;
+
+          const { error: rpcError } = await ctx.supabaseClient.rpc('admin_reset_player_statistics', {
+            p_profile_id: user.id
+          });
+
+          if (rpcError) {
+            showError(rpcError.message || 'Reset failed');
+            return;
+          }
+
+          showSuccess(`Statistics for "${user.username}" have been reset.`);
         });
 
         const deleteBtn = row.querySelector('[data-action="delete-user"]');

@@ -103,6 +103,8 @@ let playState = {
 
 // Flag to track if player is viewing results
 let viewingResults = false;
+// Flag to prevent duplicate statistics recording within the same deal
+let dealStatsRecorded = false;
 
 // Vulnerability cycle - 16 deals pattern
 // "0" = neither vulnerable, "-" = EW vulnerable, "|" = NS vulnerable, "+" = both vulnerable
@@ -993,6 +995,7 @@ export const tablePage = {
       };
       hcpScores = { north: 0, east: 0, south: 0, west: 0 };
       viewingResults = false;
+      dealStatsRecorded = false;
       ['north', 'south', 'east', 'west'].forEach((seat) => {
         playerReadyState[seat] = false;
       });
@@ -1686,6 +1689,37 @@ export const tablePage = {
         }).catch(err => {
           console.warn('Failed to record IMP result in database:', err);
         });
+
+        // Record deal statistics for all 4 players - ONLY by North player, only once per deal
+        if (!dealStatsRecorded) {
+          dealStatsRecorded = true;
+          // Use IMP values for total_score: impForNS (positive = NS wins, negative = EW wins)
+          const statPayload = isFourPasses
+            ? {
+                p_room_id:        currentTable.id,
+                p_declarer_seat:  null,
+                p_contract_level: null,
+                p_contract_made:  null,
+                p_overtricks:     0,
+                p_score_ns:       0,
+                p_score_ew:       0
+              }
+            : {
+                p_room_id:        currentTable.id,
+                p_declarer_seat:  playState.declarer,            // 'N','S','E','W'
+                p_contract_level: contract.level,                // 1–7
+                p_contract_made:  contractResult?.made ?? false,
+                p_overtricks:     contractResult?.made ? (contractResult.overtricks || 0) : 0,
+                p_score_ns:       impForNS,    // IMP from NS perspective
+                p_score_ew:       -impForNS    // IMP from EW perspective
+              };
+
+          ctx.supabaseClient.rpc('record_deal_statistics', statPayload)
+            .then(({ error }) => {
+              if (error) console.warn('Failed to record deal statistics:', error);
+              else        console.log('✓ Deal statistics recorded (IMP-based)');
+            });
+        }
       }
       
       gameArea.innerHTML = `
@@ -1872,6 +1906,7 @@ export const tablePage = {
           
           // Mark that player is no longer viewing results
           viewingResults = false;
+          dealStatsRecorded = false;
           
           // Clear original hands for next deal
           playState.originalHands = null;
