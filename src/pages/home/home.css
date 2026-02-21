@@ -20,3 +20,24 @@
 .input-icon {
   font-size: 1.1rem;
 }
+
+/* Password visibility toggle */
+.password-toggle {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 0 0.25rem;
+  color: #6c757d;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 1rem;
+  transition: color 0.15s;
+}
+.password-toggle:hover,
+.password-toggle:focus {
+  color: #198754;
+  outline: none;
+}

@@ -46,7 +46,8 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
 
   if (roleBadge) {
     const role = currentUser?.role;
-    if (!role) {
+    const username = currentUser?.username || currentUser?.display_name;
+    if (!role || !username) {
       roleBadge.classList.add('d-none');
     } else {
       roleBadge.classList.remove('d-none');
@@ -60,22 +61,8 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
         roleBadge.classList.add('bg-warning', 'text-dark');
       }
 
-      const roleLabelKey = role === 'admin'
-        ? 'roleAdmin'
-        : role === 'authorized'
-          ? 'roleAuthorized'
-          : 'roleUnauthorized';
-
-      const compactRoleLabelKey = role === 'admin'
-        ? 'roleAdminShort'
-        : role === 'authorized'
-          ? 'roleAuthorizedShort'
-          : 'roleUnauthorizedShort';
-
-      const isCompactBadge = window.matchMedia('(max-width: 575.98px)').matches;
-
-      roleBadge.textContent = t(language, isCompactBadge ? compactRoleLabelKey : roleLabelKey);
-      roleBadge.title = `${t(language, 'currentRole')}: ${t(language, roleLabelKey)}`;
+      roleBadge.textContent = username;
+      roleBadge.title = `${t(language, 'currentRole')}: ${t(language, role === 'admin' ? 'roleAdmin' : role === 'authorized' ? 'roleAuthorized' : 'roleUnauthorized')}`;
     }
   }
 

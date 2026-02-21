@@ -20,6 +20,20 @@ export const homePage = {
 
     applyTranslations(host, ctx.language);
 
+    // Password visibility toggle on hover
+    host.querySelectorAll('[data-toggle-password]').forEach((btn) => {
+      const input = host.querySelector(`#${btn.getAttribute('data-toggle-password')}`);
+      const icon = btn.querySelector('i');
+      btn.addEventListener('mouseenter', () => {
+        input.type = 'text';
+        icon.className = 'bi bi-eye-slash';
+      });
+      btn.addEventListener('mouseleave', () => {
+        input.type = 'password';
+        icon.className = 'bi bi-eye';
+      });
+    });
+
     const goAfterAuth = (role) => {
       if (role === 'authorized' || role === 'admin') {
         ctx.navigate('/lobby');
