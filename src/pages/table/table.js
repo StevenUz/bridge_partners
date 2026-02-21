@@ -679,7 +679,7 @@ export const tablePage = {
       try { localStorage.removeItem(`tablePlayState:${currentTable.id}`); } catch (e) { /* no-op */ }
       const statusEl = host.querySelector('[data-status-text]');
       const hourglassIcon = host.querySelector('[data-hourglass-icon]');
-      if (statusEl) statusEl.textContent = 'Waiting for dealing...';
+      if (statusEl) statusEl.textContent = ctx.t('tableStatusReady');
       if (hourglassIcon) hourglassIcon.classList.add('hourglass-spinning');
     }
 
@@ -952,7 +952,7 @@ export const tablePage = {
       // Reset header UI
       const statusEl = host.querySelector('[data-status-text]');
       const hourglassIcon = host.querySelector('[data-hourglass-icon]');
-      if (statusEl) statusEl.textContent = 'Waiting for dealing...';
+      if (statusEl) statusEl.textContent = ctx.t('tableStatusReady');
       if (hourglassIcon) hourglassIcon.classList.add('hourglass-spinning');
       if (statusLine) statusLine.classList.remove('d-none');
       if (contractPill) contractPill.classList.add('d-none');
@@ -1009,7 +1009,7 @@ export const tablePage = {
 
       const statusEl = host.querySelector('[data-status-text]');
       const hourglassIcon = host.querySelector('[data-hourglass-icon]');
-      if (statusEl) statusEl.textContent = 'Waiting for dealing...';
+      if (statusEl) statusEl.textContent = ctx.t('tableStatusReady');
       if (hourglassIcon) hourglassIcon.classList.add('hourglass-spinning');
       if (statusLine) statusLine.classList.remove('d-none');
       if (contractPill) contractPill.classList.add('d-none');
@@ -1960,7 +1960,7 @@ export const tablePage = {
             // Show ready screen for dealer with visible panels and Deal button
             const statusEl = host.querySelector('[data-status-text]');
             const hourglassIcon = host.querySelector('[data-hourglass-icon]');
-            if (statusEl) statusEl.textContent = 'Waiting for dealing...';
+            if (statusEl) statusEl.textContent = ctx.t('tableStatusReady');
             if (hourglassIcon) hourglassIcon.classList.add('hourglass-spinning');
             
             // Show ready panels
