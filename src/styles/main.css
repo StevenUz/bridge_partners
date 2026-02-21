@@ -82,6 +82,11 @@ main {
   --bs-btn-hover-border-color: #9f2f25;
 }
 
+.badge.bg-danger {
+  --bs-danger: var(--accent-red);
+  background-color: var(--accent-red) !important;
+}
+
 .form-control,
 .form-select {
   background-color: #1a5744;

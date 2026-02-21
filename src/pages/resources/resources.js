@@ -155,12 +155,11 @@ function initializeBootstrapTabs(host) {
 }
 
 function setupResourcesEvents(host, ctx) {
-  // Handle PDF download links
-  const pdfLinks = host.querySelectorAll('.pdf-download-link')
-  pdfLinks.forEach(link => {
-    link.addEventListener('click', (e) => {
-      e.preventDefault()
-      const pdfKey = link.getAttribute('data-pdf-key')
+  // Handle PDF flip card clicks → download
+  const flipCards = host.querySelectorAll('.pdf-flip-card')
+  flipCards.forEach(card => {
+    card.addEventListener('click', () => {
+      const pdfKey = card.getAttribute('data-pdf-key')
       const url = getPdfUrl(pdfKey)
       if (url) {
         window.open(url, '_blank')

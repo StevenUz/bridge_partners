@@ -3,87 +3,86 @@
     <h1 class="mb-4" data-i18n="resourcesTitle"></h1>
     <p class="lead text-muted mb-5" data-i18n="resourcesSubtitle"></p>
 
-    <!-- PDF Documents Section with Tabs -->
+    <!-- PDF Documents Section - flip cards -->
     <div class="row g-4">
       <div class="col-12">
         <h2 class="mb-4" data-i18n="resourcesDocuments"></h2>
-        
-        <!-- Tab Navigation -->
-        <div class="pdf-tabs-wrapper">
-          <div class="nav nav-tabs pdf-tabs" role="tablist" id="pdfTabs">
-            <button class="nav-link pdf-tab-btn active" id="pdf-tab-0" data-bs-toggle="tab" data-bs-target="#pdf-content-0" type="button" role="tab">
-              <i class="bi bi-file-pdf"></i>
-              <span>2007 Laws</span>
-            </button>
-            <button class="nav-link pdf-tab-btn" id="pdf-tab-1" data-bs-toggle="tab" data-bs-target="#pdf-content-1" type="button" role="tab">
-              <i class="bi bi-file-pdf"></i>
-              <span>Basics</span>
-            </button>
-            <button class="nav-link pdf-tab-btn" id="pdf-tab-2" data-bs-toggle="tab" data-bs-target="#pdf-content-2" type="button" role="tab">
-              <i class="bi bi-file-pdf"></i>
-              <span>Laws</span>
-            </button>
-            <button class="nav-link pdf-tab-btn" id="pdf-tab-3" data-bs-toggle="tab" data-bs-target="#pdf-content-3" type="button" role="tab">
-              <i class="bi bi-file-pdf"></i>
-              <span>Въведение</span>
-            </button>
-          </div>
-        </div>
 
-        <!-- Tab Content -->
-        <div class="tab-content pdf-tab-content" id="pdfTabContent">
-          <div class="tab-pane fade show active" id="pdf-content-0" role="tabpanel">
-            <div class="pdf-content-card">
-              <div class="pdf-preview-icon">
-                <i class="bi bi-file-pdf"></i>
+        <div class="pdf-cards-row">
+
+          <!-- Card 1: 2007 Laws – blue back, Ace of Clubs -->
+          <div class="pdf-card-item">
+            <div class="pdf-card-label">
+              <h6>2007 Laws Complete (Bulgarian)</h6>
+              <p>Complete 2007 Laws of Bridge in Bulgarian</p>
+            </div>
+            <div class="pdf-flip-card" data-pdf-key="laws2007" title="Click to download">
+              <div class="pdf-flip-inner">
+                <div class="pdf-card-back pdf-blue-back"><div class="pdf-back-pattern"></div></div>
+                <div class="pdf-card-front pdf-face-black">
+                  <div class="pdf-corner pdf-corner-tl"><span class="pdf-rank">A</span><span class="pdf-suit">♣</span></div>
+                  <div class="pdf-corner pdf-corner-br"><span class="pdf-rank">A</span><span class="pdf-suit">♣</span></div>
+                  <div class="pdf-center"><span class="pdf-pip">♣</span></div>
+                </div>
               </div>
-              <h5 class="mb-3">2007 Laws Complete (Bulgarian)</h5>
-              <p class="text-muted mb-4">Complete 2007 Laws of Bridge in Bulgarian</p>
-              <a href="#" class="btn btn-primary pdf-download-link" data-pdf-key="laws2007">
-                <i class="bi bi-download"></i> <span data-i18n="resourcesDownload"></span>
-              </a>
             </div>
           </div>
 
-          <div class="tab-pane fade" id="pdf-content-1" role="tabpanel">
-            <div class="pdf-content-card">
-              <div class="pdf-preview-icon">
-                <i class="bi bi-file-pdf"></i>
+          <!-- Card 2: Bridge Basics – red back, Ace of Diamonds -->
+          <div class="pdf-card-item">
+            <div class="pdf-card-label">
+              <h6>Bridge Basics Handout</h6>
+              <p>Introduction to Bridge - Basics Handout</p>
+            </div>
+            <div class="pdf-flip-card" data-pdf-key="bridgeBasics" title="Click to download">
+              <div class="pdf-flip-inner">
+                <div class="pdf-card-back pdf-red-back"><div class="pdf-back-pattern"></div></div>
+                <div class="pdf-card-front pdf-face-red">
+                  <div class="pdf-corner pdf-corner-tl"><span class="pdf-rank">A</span><span class="pdf-suit">♦</span></div>
+                  <div class="pdf-corner pdf-corner-br"><span class="pdf-rank">A</span><span class="pdf-suit">♦</span></div>
+                  <div class="pdf-center"><span class="pdf-pip">♦</span></div>
+                </div>
               </div>
-              <h5 class="mb-3">Bridge Basics Handout</h5>
-              <p class="text-muted mb-4">Introduction to Bridge - Basics Handout</p>
-              <a href="#" class="btn btn-primary pdf-download-link" data-pdf-key="bridgeBasics">
-                <i class="bi bi-download"></i> <span data-i18n="resourcesDownload"></span>
-              </a>
             </div>
           </div>
 
-          <div class="tab-pane fade" id="pdf-content-2" role="tabpanel">
-            <div class="pdf-content-card">
-              <div class="pdf-preview-icon">
-                <i class="bi bi-file-pdf"></i>
+          <!-- Card 3: Laws of Bridge – blue back, Ace of Hearts -->
+          <div class="pdf-card-item">
+            <div class="pdf-card-label">
+              <h6>Laws of Bridge</h6>
+              <p>Laws of Bridge - Complete Rules</p>
+            </div>
+            <div class="pdf-flip-card" data-pdf-key="lawsOfBridge" title="Click to download">
+              <div class="pdf-flip-inner">
+                <div class="pdf-card-back pdf-blue-back"><div class="pdf-back-pattern"></div></div>
+                <div class="pdf-card-front pdf-face-red">
+                  <div class="pdf-corner pdf-corner-tl"><span class="pdf-rank">A</span><span class="pdf-suit">♥</span></div>
+                  <div class="pdf-corner pdf-corner-br"><span class="pdf-rank">A</span><span class="pdf-suit">♥</span></div>
+                  <div class="pdf-center"><span class="pdf-pip">♥</span></div>
+                </div>
               </div>
-              <h5 class="mb-3">Laws of Bridge</h5>
-              <p class="text-muted mb-4">Laws of Bridge - Complete Rules</p>
-              <a href="#" class="btn btn-primary pdf-download-link" data-pdf-key="lawsOfBridge">
-                <i class="bi bi-download"></i> <span data-i18n="resourcesDownload"></span>
-              </a>
             </div>
           </div>
 
-          <div class="tab-pane fade" id="pdf-content-3" role="tabpanel">
-            <div class="pdf-content-card">
-              <div class="pdf-preview-icon">
-                <i class="bi bi-file-pdf"></i>
+          <!-- Card 4: Introduction – red back, Ace of Spades -->
+          <div class="pdf-card-item">
+            <div class="pdf-card-label">
+              <h6>Въведение в Спортния Бридж</h6>
+              <p>Introduction to Sports Bridge (Bulgarian)</p>
+            </div>
+            <div class="pdf-flip-card" data-pdf-key="introduction" title="Click to download">
+              <div class="pdf-flip-inner">
+                <div class="pdf-card-back pdf-red-back"><div class="pdf-back-pattern"></div></div>
+                <div class="pdf-card-front pdf-face-black">
+                  <div class="pdf-corner pdf-corner-tl"><span class="pdf-rank">A</span><span class="pdf-suit">♠</span></div>
+                  <div class="pdf-corner pdf-corner-br"><span class="pdf-rank">A</span><span class="pdf-suit">♠</span></div>
+                  <div class="pdf-center"><span class="pdf-pip">♠</span></div>
+                </div>
               </div>
-              <h5 class="mb-3">Въведение в Спортния Бридж</h5>
-              <p class="text-muted mb-4">Introduction to Sports Bridge (Bulgarian)</p>
-              <a href="#" class="btn btn-primary pdf-download-link" data-pdf-key="introduction">
-                <i class="bi bi-download"></i> <span data-i18n="resourcesDownload"></span>
-              </a>
             </div>
           </div>
-        </div>
+
+        </div><!-- /.pdf-cards-row -->
       </div>
 
       <!-- Helpful Links Section -->
