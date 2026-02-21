@@ -458,7 +458,7 @@ async function loadRoomPlayers(ctx, roomId) {
 
   const { data, error } = await ctx.supabaseClient
     .from('room_seats')
-    .select('seat_position, profile:profiles(id, username, display_name)')
+    .select('seat_position, is_ready, profile:profiles(id, username, display_name)')
     .eq('room_id', roomId);
 
   if (error) {
@@ -470,6 +470,8 @@ async function loadRoomPlayers(ctx, roomId) {
   (data || []).forEach((seat) => {
     const label = seat.profile?.username || seat.profile?.display_name || null;
     currentTable.players[seat.seat_position] = label;
+    // Sync ready state from DB (source of truth)
+    playerReadyState[seat.seat_position] = seat.is_ready ?? false;
   });
 }
 
@@ -948,6 +950,16 @@ export const tablePage = {
         playerReadyState[seat] = false;
       });
       persistReadyState(currentTable.id, playerReadyState);
+      // Reset is_ready in DB
+      if (ctx.supabaseClient && currentTable.id) {
+        ctx.supabaseClient
+          .from('room_seats')
+          .update({ is_ready: false })
+          .eq('room_id', currentTable.id)
+          .then(({ error }) => {
+            if (error) console.warn('Failed to reset is_ready in DB (clearTableState)', error);
+          });
+      }
 
       // Reset header UI
       const statusEl = host.querySelector('[data-status-text]');
@@ -1006,6 +1018,16 @@ export const tablePage = {
         playerReadyState[seat] = false;
       });
       persistReadyState(currentTable.id, playerReadyState);
+      // Reset is_ready in DB
+      if (ctx.supabaseClient && currentTable.id) {
+        ctx.supabaseClient
+          .from('room_seats')
+          .update({ is_ready: false })
+          .eq('room_id', currentTable.id)
+          .then(({ error }) => {
+            if (error) console.warn('Failed to reset is_ready in DB (resetForNextDeal)', error);
+          });
+      }
 
       const statusEl = host.querySelector('[data-status-text]');
       const hourglassIcon = host.querySelector('[data-hourglass-icon]');
@@ -2934,20 +2956,32 @@ export const tablePage = {
       if (isViewerSeat) {
         toggle.addEventListener('click', () => {
           const isEnabled = toggle.classList.contains('enabled');
-          if (isEnabled) {
-            toggle.classList.remove('enabled');
-            playerReadyState[seat] = false;
-          } else {
+          const newReady = !isEnabled;
+          if (newReady) {
             toggle.classList.add('enabled');
             playerReadyState[seat] = true;
+          } else {
+            toggle.classList.remove('enabled');
+            playerReadyState[seat] = false;
           }
           persistReadyState(currentTable.id, playerReadyState);
-          // Broadcast ready state change to other devices via Supabase Realtime
+          // Write to DB — primary cross-device sync mechanism
+          if (ctx.supabaseClient && currentTable.id) {
+            ctx.supabaseClient
+              .from('room_seats')
+              .update({ is_ready: newReady })
+              .eq('room_id', currentTable.id)
+              .eq('seat_position', seat)
+              .then(({ error }) => {
+                if (error) console.warn('Failed to update is_ready in DB', error);
+              });
+          }
+          // Also broadcast for faster UI response before postgres_changes arrives
           if (roomStateChannel) {
             roomStateChannel.send({
               type: 'broadcast',
               event: 'player-ready-toggle',
-              payload: { seat, isReady: playerReadyState[seat] }
+              payload: { seat, isReady: newReady }
             }).catch(err => console.warn('Failed to broadcast ready toggle', err));
           }
           checkAllPlayersReady();
@@ -3132,6 +3166,18 @@ export const tablePage = {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'room_seats', filter: `room_id=eq.${currentTable.id}` }, async () => {
           await loadRoomPlayers(ctx, currentTable.id);
           updateSeatLabels();
+          // Keep localStorage in sync so polling interval won't overwrite DB-sourced state
+          persistReadyState(currentTable.id, playerReadyState);
+          // Sync ready toggles in UI from playerReadyState (populated by loadRoomPlayers from DB)
+          const toggles = host.querySelectorAll('[data-ready-toggle]');
+          toggles.forEach((tg) => {
+            const s = tg.getAttribute('data-ready-toggle');
+            if (s) {
+              if (playerReadyState[s]) tg.classList.add('enabled');
+              else tg.classList.remove('enabled');
+            }
+          });
+          checkAllPlayersReady();
         })
         .subscribe();
       
@@ -3329,6 +3375,16 @@ export const tablePage = {
         persistReadyState(currentTable.id, playerReadyState);
         const readyToggles = host.querySelectorAll('.toggle-switch');
         readyToggles.forEach((tg) => tg.classList.remove('enabled'));
+        // Reset is_ready in DB so other devices see correct state
+        if (ctx.supabaseClient && currentTable.id) {
+          ctx.supabaseClient
+            .from('room_seats')
+            .update({ is_ready: false })
+            .eq('room_id', currentTable.id)
+            .then(({ error }) => {
+              if (error) console.warn('Failed to reset is_ready in DB', error);
+            });
+        }
 
         currentDeal = dealCards(dealNumber);
         // Calculate HCP for all hands and store for the current deal
