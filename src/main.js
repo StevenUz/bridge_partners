@@ -47,9 +47,8 @@ async function hasValidAuthSession() {
 
 function getStoredCurrentUser() {
   try {
-    const sessionUser = sessionStorage.getItem('currentUser');
-    const localUser = localStorage.getItem('currentUser');
-    return JSON.parse(sessionUser || localUser || 'null');
+    // sessionStorage only – window-scoped to prevent cross-window identity leakage.
+    return JSON.parse(sessionStorage.getItem('currentUser') || 'null');
   } catch {
     return null;
   }
@@ -98,7 +97,7 @@ async function getCurrentUserRole() {
     role: profile.role
   };
 
-  localStorage.setItem('currentUser', JSON.stringify(merged));
+  // sessionStorage only – window-scoped so each browser window keeps its own user.
   sessionStorage.setItem('currentUser', JSON.stringify(merged));
 
   return profile.role || null;

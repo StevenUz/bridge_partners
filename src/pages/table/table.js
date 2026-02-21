@@ -415,10 +415,7 @@ function getCurrentPlayer() {
     if (sessionPlayer) {
       return JSON.parse(sessionPlayer);
     }
-    const playerData = localStorage.getItem('currentPlayer');
-    if (playerData) {
-      return JSON.parse(playerData);
-    }
+    // No localStorage fallback – each window must have its own player identity.
   } catch (err) {
     console.warn('Failed to read current player', err);
   }
@@ -427,9 +424,8 @@ function getCurrentPlayer() {
 
 function getCurrentUserProfileId() {
   try {
-    const sessionUser = sessionStorage.getItem('currentUser');
-    const localUser = localStorage.getItem('currentUser');
-    const user = JSON.parse(sessionUser || localUser || 'null');
+    // sessionStorage only – no localStorage fallback to avoid cross-window identity leakage.
+    const user = JSON.parse(sessionStorage.getItem('currentUser') || 'null');
     return user?.id || null;
   } catch {
     return null;
@@ -710,7 +706,10 @@ export const tablePage = {
           if (loadedData) {
             impCycleData = loadedData;
             persistImpCycleData(tableId, impCycleData);
-            console.log('✓ Loaded existing IMP cycle:', impCycleData.cycleNumber, 'game', impCycleData.currentGame);
+            // Sync deal counter with IMP cycle - IMP is the authoritative source
+            dealNumber = impCycleData.currentGame;
+            localStorage.removeItem(`tableLastDealNumber:${tableId}`);
+            console.log('✓ Loaded existing IMP cycle:', impCycleData.cycleNumber, 'game', impCycleData.currentGame, '→ dealNumber synced to', dealNumber);
           }
         } else {
           // Create new cycle
@@ -720,7 +719,10 @@ export const tablePage = {
             if (createdData) {
               impCycleData = createdData;
               persistImpCycleData(tableId, impCycleData);
-              console.log('✓ Created new IMP cycle:', impCycleData.cycleId);
+              // Fresh cycle always starts at game 1 = deal 1 (South dealer)
+              dealNumber = 1;
+              localStorage.removeItem(`tableLastDealNumber:${tableId}`);
+              console.log('✓ Created new IMP cycle:', impCycleData.cycleId, '→ dealNumber reset to 1');
             }
           } else {
             console.warn('Failed to create IMP cycle in database, using local only');
@@ -3093,6 +3095,19 @@ export const tablePage = {
       const tableId = event?.detail?.tableId;
       if (!tableId || String(tableId) !== String(currentTable.id)) return;
       console.log('✓ IMP cycle reset received (same tab)');
+      // Reset in-memory deal counter so dealer starts from South (deal 1)
+      dealNumber = 1;
+      // Deactivate the current DB cycle so a fresh one is created on next load
+      if (impCycleData.cycleId && ctx.supabaseClient) {
+        ctx.supabaseClient
+          .from('imp_cycles')
+          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .eq('id', impCycleData.cycleId)
+          .then(({ error }) => {
+            if (error) console.warn('Failed to deactivate IMP cycle in DB:', error);
+            else console.log('✓ IMP cycle deactivated in DB');
+          });
+      }
       impCycleData = createEmptyImpCycleData();
       // Note: clearTableState() should NOT be called here - IMP reset should only
       // clear IMP data, not interrupt active gameplay. Deal/vulnerability reset is
@@ -3805,7 +3820,7 @@ export const tablePage = {
           if (currentUser?.display_name) return currentUser.display_name;
         }
 
-        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+        const currentUser = JSON.parse(sessionStorage.getItem('currentUser') || 'null');
         if (currentUser?.username) return currentUser.username;
         if (currentUser?.display_name) return currentUser.display_name;
       } catch (err) {
@@ -3869,7 +3884,7 @@ export const tablePage = {
           profileId = sessionUser?.id || null;
         }
         if (!profileId) {
-          const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+          const currentUser = JSON.parse(sessionStorage.getItem('currentUser') || 'null');
           profileId = currentUser?.id || null;
         }
       } catch (err) {

@@ -10,6 +10,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-export const supabaseClient = supabaseUrl && supabaseAnonKey 
-  ? createClient(supabaseUrl, supabaseAnonKey)
+// Use sessionStorage for auth so each browser window/tab maintains its own
+// independent session. Without this, the JWT is stored in localStorage (shared
+// across all windows), causing the last-logged-in user to "take over" every tab.
+export const supabaseClient = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        storage: typeof window !== 'undefined' ? window.sessionStorage : undefined,
+        storageKey: 'sb-auth-token',
+      },
+    })
   : null;

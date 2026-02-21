@@ -29,14 +29,14 @@ function safeJsonParse(value) {
 }
 
 function getStoredCurrentUser() {
-  const sessionUser = safeJsonParse(sessionStorage.getItem('currentUser'));
-  const localUser = safeJsonParse(localStorage.getItem('currentUser'));
-  return sessionUser || localUser || null;
+  // sessionStorage is window-scoped → each window has its own logged-in user.
+  // Intentionally do NOT fall back to localStorage to avoid cross-window leakage.
+  return safeJsonParse(sessionStorage.getItem('currentUser')) || null;
 }
 
 function persistCurrentUser(user) {
   const payload = JSON.stringify(user);
-  localStorage.setItem('currentUser', payload);
+  // Only sessionStorage – keeps every browser window independent.
   sessionStorage.setItem('currentUser', payload);
 }
 

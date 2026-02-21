@@ -21,8 +21,8 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
 
   let currentUser = null;
   try {
-    const rawCurrentUser = sessionStorage.getItem('currentUser') || localStorage.getItem('currentUser');
-    currentUser = rawCurrentUser ? JSON.parse(rawCurrentUser) : null;
+    // sessionStorage only – window-scoped, each window has its own logged-in user.
+    currentUser = JSON.parse(sessionStorage.getItem('currentUser') || 'null');
   } catch (err) {
     console.warn('Failed to parse current user for admin nav visibility', err);
   }
@@ -90,8 +90,7 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
 
     try {
       const sessionPlayer = sessionStorage.getItem('currentPlayer');
-      const localPlayer = localStorage.getItem('currentPlayer');
-      const playerData = JSON.parse(sessionPlayer || localPlayer || '{}');
+      const playerData = JSON.parse(sessionPlayer || '{}');
       if (playerData?.tableId) return playerData.tableId;
     } catch (err) {
       console.warn('Failed to read current player tableId', err);
@@ -123,7 +122,7 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
       
       let currentUser = null;
       try {
-        const storedUser = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
+        const storedUser = sessionStorage.getItem('currentUser');
         if (storedUser) {
           currentUser = JSON.parse(storedUser);
         }
@@ -248,12 +247,10 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
         };
       }
       
-      // Get current player perspective (NS or EW) from sessionStorage or localStorage
+      // Get current player perspective (NS or EW) from sessionStorage
       let currentPlayerSeat = null;
       try {
-        const sessionPlayer = sessionStorage.getItem('currentPlayer');
-        const localPlayer = localStorage.getItem('currentPlayer');
-        const playerData = JSON.parse(sessionPlayer || localPlayer || '{}');
+        const playerData = JSON.parse(sessionStorage.getItem('currentPlayer') || '{}');
         currentPlayerSeat = playerData.seat;
       } catch (e) {
         console.warn('Failed to parse player data', e);

@@ -3,9 +3,7 @@ import './admin.css';
 
 function getCurrentUser() {
   try {
-    const sessionUser = sessionStorage.getItem('currentUser');
-    const localUser = localStorage.getItem('currentUser');
-    return JSON.parse(sessionUser || localUser || 'null');
+    return JSON.parse(sessionStorage.getItem('currentUser') || 'null');
   } catch {
     return null;
   }

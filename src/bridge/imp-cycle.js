@@ -169,7 +169,8 @@ export function dbCycleToLocal(dbCycle) {
   if (!dbCycle) return null;
 
   return {
-    cycleId: dbCycle.id,
+    // RPC returns 'id'; older RPC version returned 'cycle_id' – handle both
+    cycleId: dbCycle.id || dbCycle.cycle_id || null,
     cycleNumber: dbCycle.cycle_number,
     currentGame: dbCycle.current_game,
     table: dbCycle.table_data || {}

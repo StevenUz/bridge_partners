@@ -425,7 +425,7 @@ function renderRooms(grid, rooms, ctx) {
             name: playerName,
             joinedAt: new Date().toISOString()
           };
-          localStorage.setItem('currentPlayer', JSON.stringify(playerPayload));
+          // sessionStorage only – keeps each browser window independent.
           sessionStorage.setItem('currentPlayer', JSON.stringify(playerPayload));
           ctx.navigate(`/table?id=${tableId}&position=${seatPosition}`);
         });
@@ -515,8 +515,8 @@ async function getCurrentProfile(ctx) {
   };
 
   try {
-    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    localStorage.setItem('currentUser', JSON.stringify({ ...currentUser, ...profile }));
+    const currentUser = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+    // sessionStorage only – window-scoped, prevents cross-window identity leak.
     sessionStorage.setItem('currentUser', JSON.stringify({ ...currentUser, ...profile }));
   } catch (err) {
     console.warn('Failed to persist current user', err);
