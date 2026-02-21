@@ -35,6 +35,15 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
     }
   }
 
+  const authorizedNavItems = nav.querySelectorAll('[data-authorized-only]');
+  authorizedNavItems.forEach((item) => {
+    if (currentUser?.role === 'authorized' || currentUser?.role === 'admin') {
+      item.classList.remove('d-none');
+    } else {
+      item.classList.add('d-none');
+    }
+  });
+
   if (roleBadge) {
     const role = currentUser?.role;
     if (!role) {

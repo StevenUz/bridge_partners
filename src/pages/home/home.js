@@ -20,7 +20,7 @@ export const homePage = {
 
     applyTranslations(host, ctx.language);
 
-    const goLobby = () => ctx.navigate('/lobby');
+    const goLobby = () => ctx.navigate('/resources');
 
     // Toggle between forms
     showSignupBtn.addEventListener('click', () => {

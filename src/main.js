@@ -203,15 +203,23 @@ async function renderPage({ skipHistory = false } = {}) {
       state.currentRoute = matchRoute('/');
       renderHeader();
       history.replaceState({}, '', '/');
+    } else {
+      const role = await getCurrentUserRole();
+      if (role !== 'authorized' && role !== 'admin') {
+        state.currentRoute = matchRoute('/resources');
+        renderHeader();
+        history.replaceState({}, '', '/resources');
+      }
     }
   }
 
   if (ADMIN_ROUTES.has(state.currentRoute.path)) {
     const role = await getCurrentUserRole();
     if (role !== 'admin') {
-      state.currentRoute = matchRoute('/lobby');
+      const fallback = role === 'authorized' ? '/lobby' : '/resources';
+      state.currentRoute = matchRoute(fallback);
       renderHeader();
-      history.replaceState({}, '', '/lobby');
+      history.replaceState({}, '', fallback);
     }
   }
 
@@ -239,14 +247,21 @@ async function navigate(path) {
     if (!authenticated) {
       targetPath = '/';
       targetRoute = matchRoute('/');
+    } else {
+      const role = await getCurrentUserRole();
+      if (role !== 'authorized' && role !== 'admin') {
+        targetPath = '/resources';
+        targetRoute = matchRoute('/resources');
+      }
     }
   }
 
   if (ADMIN_ROUTES.has(targetRoute.path)) {
     const role = await getCurrentUserRole();
     if (role !== 'admin') {
-      targetPath = '/lobby';
-      targetRoute = matchRoute('/lobby');
+      const fallback = role === 'authorized' ? '/lobby' : '/resources';
+      targetPath = fallback;
+      targetRoute = matchRoute(fallback);
     }
   }
 
@@ -269,16 +284,25 @@ window.addEventListener('popstate', async () => {
   const targetRoute = matchRoute(fullPath);
   if (isProtectedRoute(targetRoute.path)) {
     const authenticated = await hasValidAuthSession();
-    state.currentRoute = authenticated ? targetRoute : matchRoute('/');
     if (!authenticated) {
+      state.currentRoute = matchRoute('/');
       history.replaceState({}, '', '/');
+    } else {
+      const role = await getCurrentUserRole();
+      if (role !== 'authorized' && role !== 'admin') {
+        state.currentRoute = matchRoute('/resources');
+        history.replaceState({}, '', '/resources');
+      } else {
+        state.currentRoute = targetRoute;
+      }
     }
   } else {
     if (ADMIN_ROUTES.has(targetRoute.path)) {
       const role = await getCurrentUserRole();
       if (role !== 'admin') {
-        state.currentRoute = matchRoute('/lobby');
-        history.replaceState({}, '', '/lobby');
+        const fallback = role === 'authorized' ? '/lobby' : '/resources';
+        state.currentRoute = matchRoute(fallback);
+        history.replaceState({}, '', fallback);
       } else {
         state.currentRoute = targetRoute;
       }
