@@ -1084,7 +1084,7 @@ export const tablePage = {
       }
 
       setTimeout(() => {
-        window.location.reload();
+        ctx.navigate('/table');
       }, 150);
     };
 
@@ -3306,7 +3306,7 @@ export const tablePage = {
           console.log('✓ Table reset broadcast received');
           clearTableState();
           setTimeout(() => {
-            window.location.reload();
+            ctx.navigate('/table');
           }, 150);
         })
         .on('broadcast', { event: 'round-reset' }, (payload) => {
