@@ -595,6 +595,9 @@ export const tablePage = {
     host.innerHTML = template;
     let persistentDealBtn = host.querySelector('[data-action="deal-cards"]');
     let autoDealStartPending = false;
+    // Local mirror of rooms.game_phase — used to avoid race conditions
+    // between is_ready reset and deal data arriving on remote clients
+    let currentGamePhase = 'waiting';
 
     const tableId = getTableId();
     currentTable.id = tableId;
@@ -645,9 +648,6 @@ export const tablePage = {
     // Declare channels at top level for access in functions
     let realtimeChannel = null;
     let roomStateChannel = null;
-    // Local mirror of rooms.game_phase — used to avoid race conditions
-    // between is_ready reset and deal data arriving on remote clients
-    let currentGamePhase = 'waiting';
 
     const storedPlayState = loadPlayState(currentTable.id);
     if (storedPlayState) {
@@ -3193,6 +3193,29 @@ export const tablePage = {
       // handled by header.js removing tableLastDealNumber and tableVulnerability.
     });
 
+    const syncDealStateFromRoom = async () => {
+      if (!ctx.supabaseClient || !currentTable?.id) return;
+      try {
+        const { data, error } = await ctx.supabaseClient
+          .from('rooms')
+          .select('game_phase, deal_data')
+          .eq('id', currentTable.id)
+          .single();
+        if (error || !data) return;
+
+        currentGamePhase = data.game_phase || 'waiting';
+        if (currentGamePhase === 'dealing' && data.deal_data) {
+          persistDealState(currentTable.id, data.deal_data);
+          if (data.deal_data.hcpScores) {
+            hcpScores = data.deal_data.hcpScores;
+          }
+          renderDealAndBidding();
+        }
+      } catch (err) {
+        console.warn('Failed to sync deal state from room row', err);
+      }
+    };
+
     // Setup realtime channels
     if (ctx.supabaseClient && currentTable.id) {
       realtimeChannel = ctx.supabaseClient
@@ -3213,6 +3236,7 @@ export const tablePage = {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'room_seats', filter: `room_id=eq.${currentTable.id}` }, async () => {
           await loadRoomPlayers(ctx, currentTable.id);
           updateSeatLabels();
+          await syncDealStateFromRoom();
           // Keep localStorage in sync so polling interval won't overwrite DB-sourced state
           persistReadyState(currentTable.id, playerReadyState);
           // Only sync ready UI when in 'waiting' phase — avoids flash of not-ready
@@ -3294,6 +3318,7 @@ export const tablePage = {
         .on('broadcast', { event: 'deal-started' }, (payload) => {
           if (!payload?.payload) return;
           console.log('✓ Deal started broadcast received');
+          currentGamePhase = 'dealing';
           // Persist to localStorage so renderDealAndBidding can read it
           persistDealState(currentTable.id, payload.payload);
           // Also update in-memory hcpScores
