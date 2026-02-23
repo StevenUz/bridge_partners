@@ -645,6 +645,43 @@ export const tablePage = {
       impCycleData = storedImpData;
     }
     
+    const syncImpCycleFromDatabase = async ({ syncDealCounter = false } = {}) => {
+      if (!ctx.supabaseClient) return false;
+
+      const players = getCurrentPlayers(currentTable);
+      if (!players) return false;
+
+      try {
+        const existingCycle = await findExistingCycle(ctx.supabaseClient, players);
+        if (!existingCycle) return false;
+
+        const loadedData = dbCycleToLocal(existingCycle);
+        if (!loadedData) return false;
+
+        impCycleData = {
+          ...createEmptyImpCycleData(),
+          ...loadedData,
+          table: { ...createEmptyImpCycleData().table, ...(loadedData.table || {}) }
+        };
+
+        persistImpCycleData(currentTable.id, impCycleData);
+
+        if (syncDealCounter) {
+          dealNumber = impCycleData.currentGame;
+          localStorage.removeItem(`tableLastDealNumber:${currentTable.id}`);
+        }
+
+        window.dispatchEvent(new CustomEvent('imp-cycle-updated', {
+          detail: { tableId: currentTable.id, source: 'db-sync' }
+        }));
+
+        return true;
+      } catch (err) {
+        console.warn('Failed to sync IMP cycle from database', err);
+        return false;
+      }
+    };
+
     // Declare channels at top level for access in functions
     let realtimeChannel = null;
     let roomStateChannel = null;
@@ -1733,11 +1770,13 @@ export const tablePage = {
         recordImpResult(currentTable.id, impForNS, ctx.supabaseClient).then(() => {
           console.log('✓ IMP result recorded by North:', impForNS);
           // Broadcast IMP update to sync all players' tables
-          if (realtimeChannel) {
-            realtimeChannel.send({
+          if (roomStateChannel) {
+            roomStateChannel.send({
               type: 'broadcast',
               event: 'imp-table-updated',
               payload: { tableId: currentTable.id }
+            }).catch(err => {
+              console.warn('Failed to broadcast imp-table-updated', err);
             });
           }
         }).catch(err => {
@@ -3365,6 +3404,19 @@ export const tablePage = {
           setTimeout(() => {
             checkAllPlayersReady();
           }, 50);
+        })
+        .on('broadcast', { event: 'imp-table-updated' }, async (payload) => {
+          const payloadTableId = payload?.payload?.tableId;
+          if (payloadTableId && String(payloadTableId) !== String(currentTable.id)) return;
+
+          console.log('✓ IMP table update broadcast received, syncing from DB');
+          const synced = await syncImpCycleFromDatabase({ syncDealCounter: true });
+
+          if (!synced) {
+            window.dispatchEvent(new CustomEvent('imp-cycle-updated', {
+              detail: { tableId: currentTable.id, source: 'broadcast-fallback' }
+            }));
+          }
         })
         .subscribe((status) => {
           console.log('✓ Room state channel status:', status);
