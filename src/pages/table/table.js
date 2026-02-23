@@ -1620,7 +1620,20 @@ export const tablePage = {
     };
     updateTrickCounters();
     const getDummySeat = () => (playState?.dummy ? normalizeSeatName(playState.dummy) : null);
+    const getDeclarerSeat = () => (playState?.declarer ? normalizeSeatName(playState.declarer) : null);
     const shouldRevealDummy = (seatName) => playState?.inProgress && playState?.firstLeadPlayed && getDummySeat() === seatName;
+    const shouldRevealDeclarerForDummy = (seatName) => {
+      if (!playState?.inProgress || !playState?.firstLeadPlayed) return false;
+      const dummySeat = getDummySeat();
+      const declarerSeat = getDeclarerSeat();
+      if (!dummySeat || !declarerSeat || !viewerSeat) return false;
+      return viewerSeat === dummySeat && seatName === declarerSeat && seatName !== viewerSeat;
+    };
+    const canViewerSeeHand = (seatName) => (
+      viewerSeat === seatName ||
+      shouldRevealDummy(seatName) ||
+      shouldRevealDeclarerForDummy(seatName)
+    );
     const shouldShowHcp = (seatName) => {
       const dummySeat = getDummySeat();
       if (viewerSeat === seatName) return true;
@@ -2220,7 +2233,7 @@ export const tablePage = {
         }
         container.appendChild(nameLabel);
 
-        const isVisible = viewerSeat === seat || shouldRevealDummy(seat);
+        const isVisible = canViewerSeeHand(seat);
         const hiddenCount = currentDeal.hands?.[seat]?.length || 0;
         const displayHand = isVisible
           ? currentDeal.hands[seat]
@@ -2661,7 +2674,7 @@ export const tablePage = {
         const hand = createCardDisplay(
           currentDeal.hands[seatName],
           slotName,
-          viewerSeat === seatName || shouldRevealDummy(seatName),
+          canViewerSeeHand(seatName),
           isRedBack
         );
         container.appendChild(hand);
