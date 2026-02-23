@@ -1670,6 +1670,30 @@ export const tablePage = {
       });
     };
 
+    const resetPlayStateForNewDeal = ({ clearDealMetadata = false } = {}) => {
+      playState.contract = null;
+      playState.declarer = null;
+      playState.dummy = null;
+      playState.openingLeader = null;
+      playState.currentTurn = null;
+      playState.currentTrick = [];
+      playState.playedCounts = { north: 0, east: 0, south: 0, west: 0 };
+      playState.trickLocked = false;
+      playState.lastTrickWinner = null;
+      playState.firstLeadPlayed = false;
+      playState.tricksNS = 0;
+      playState.tricksEW = 0;
+      playState.inProgress = false;
+
+      if (clearDealMetadata) {
+        playState.hcpNS = 0;
+        playState.hcpEW = 0;
+        playState.fitsNS = 0;
+        playState.fitsEW = 0;
+        playState.originalHands = null;
+      }
+    };
+
     const showDealResults = () => {
       console.log('[Results] showDealResults called');
       if (!gameArea) {
@@ -2076,6 +2100,19 @@ export const tablePage = {
           checkAllPlayersReady();
         });
       }
+
+      // Immediately reset trick/contract state for the next deal so counters show 0:0
+      // while results are displayed and before a new contract is reached.
+      resetPlayStateForNewDeal();
+      try {
+        localStorage.setItem(`tablePlayState:${currentTable.id}`, JSON.stringify(playState));
+      } catch (e) {
+        console.warn('Failed to persist reset playState after results', e);
+      }
+      updateTrickCounters();
+      updateContractDisplay();
+      updatePlayTurnIndicator();
+      updateActionIndicator();
     };
 
     const renderPlayArea = () => {
@@ -3512,6 +3549,9 @@ export const tablePage = {
         console.log(`[Deal Click] dealNumber before: ${dealNumber}, nextDealNumber from storage: ${nextDealNumber}`);
         dealNumber = nextDealNumber;
         console.log(`[Deal] Starting deal ${dealNumber}`);
+
+        // Ensure trick counters/contracts are reset before a new deal begins.
+        resetPlayStateForNewDeal();
         
         // Reset ready state locally (in memory + localStorage)
         ['north', 'south', 'east', 'west'].forEach((seat) => {
