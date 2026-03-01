@@ -139,11 +139,50 @@ let impCycleData = {
   ...createEmptyImpCycleData()
 };
 
+function normalizeImpCycleTable(rawTable) {
+  const emptyTable = createEmptyImpCycleData().table;
+
+  let parsedTable = rawTable;
+  if (typeof parsedTable === 'string') {
+    try {
+      parsedTable = JSON.parse(parsedTable);
+    } catch {
+      parsedTable = {};
+    }
+  }
+
+  if (!parsedTable || typeof parsedTable !== 'object' || Array.isArray(parsedTable)) {
+    return { ...emptyTable };
+  }
+
+  return {
+    ...emptyTable,
+    ...parsedTable
+  };
+}
+
+function normalizeImpCycleData(rawData) {
+  const emptyData = createEmptyImpCycleData();
+
+  if (!rawData || typeof rawData !== 'object') {
+    return {
+      ...emptyData,
+      table: { ...emptyData.table }
+    };
+  }
+
+  return {
+    ...emptyData,
+    ...rawData,
+    table: normalizeImpCycleTable(rawData.table ?? rawData.table_data ?? {})
+  };
+}
+
 function loadImpCycleData(tableId) {
   try {
     const raw = localStorage.getItem(`tableImpCycle:${tableId}`);
     if (!raw) return null;
-    return JSON.parse(raw);
+    return normalizeImpCycleData(JSON.parse(raw));
   } catch (err) {
     console.warn('Failed to load IMP cycle data', err);
     return null;
@@ -173,11 +212,7 @@ async function recordImpResult(tableId, impForNS, supabaseClient) {
   // Load current cycle data
   const stored = loadImpCycleData(tableId);
   if (stored) {
-    impCycleData = {
-      ...createEmptyImpCycleData(),
-      ...stored,
-      table: { ...createEmptyImpCycleData().table, ...(stored.table || {}) }
-    };
+    impCycleData = normalizeImpCycleData(stored);
   } else {
     // Critical: if localStorage was cleared (e.g. via "Нулирай таблицата"),
     // do NOT keep stale in-memory values. Start a fresh cycle.
@@ -642,7 +677,7 @@ export const tablePage = {
     // Load IMP cycle data for this table
     const storedImpData = loadImpCycleData(tableId);
     if (storedImpData) {
-      impCycleData = storedImpData;
+      impCycleData = normalizeImpCycleData(storedImpData);
     }
     
     const syncImpCycleFromDatabase = async ({ syncDealCounter = false } = {}) => {
@@ -658,11 +693,7 @@ export const tablePage = {
         const loadedData = dbCycleToLocal(existingCycle);
         if (!loadedData) return false;
 
-        impCycleData = {
-          ...createEmptyImpCycleData(),
-          ...loadedData,
-          table: { ...createEmptyImpCycleData().table, ...(loadedData.table || {}) }
-        };
+        impCycleData = normalizeImpCycleData(loadedData);
 
         persistImpCycleData(currentTable.id, impCycleData);
 
@@ -680,6 +711,67 @@ export const tablePage = {
         console.warn('Failed to sync IMP cycle from database', err);
         return false;
       }
+    };
+
+    let impCycleInitPromise = null;
+
+    const ensureImpCycleInitialized = async ({ syncDealCounter = true } = {}) => {
+      if (!ctx.supabaseClient) return false;
+
+      const players = getCurrentPlayers(currentTable);
+      if (!players) return false;
+
+      if (impCycleInitPromise) return impCycleInitPromise;
+
+      impCycleInitPromise = (async () => {
+        try {
+          const existingCycle = await findExistingCycle(ctx.supabaseClient, players);
+          if (existingCycle) {
+            const loadedData = dbCycleToLocal(existingCycle);
+            if (loadedData) {
+              impCycleData = normalizeImpCycleData(loadedData);
+              persistImpCycleData(tableId, impCycleData);
+              if (syncDealCounter) {
+                dealNumber = impCycleData.currentGame;
+                localStorage.removeItem(`tableLastDealNumber:${tableId}`);
+              }
+              window.dispatchEvent(new CustomEvent('imp-cycle-updated', {
+                detail: { tableId: currentTable.id, source: 'ensure-existing' }
+              }));
+              console.log('✓ Loaded existing IMP cycle:', impCycleData.cycleNumber, 'game', impCycleData.currentGame, '→ dealNumber synced to', dealNumber);
+              return true;
+            }
+          }
+
+          const newCycle = await createNewCycle(ctx.supabaseClient, players, tableId);
+          if (!newCycle) {
+            console.warn('Failed to create IMP cycle in database, using local only');
+            return false;
+          }
+
+          const createdData = dbCycleToLocal(newCycle);
+          if (!createdData) return false;
+
+          impCycleData = normalizeImpCycleData(createdData);
+          persistImpCycleData(tableId, impCycleData);
+          if (syncDealCounter) {
+            dealNumber = 1;
+            localStorage.removeItem(`tableLastDealNumber:${tableId}`);
+          }
+          window.dispatchEvent(new CustomEvent('imp-cycle-updated', {
+            detail: { tableId: currentTable.id, source: 'ensure-created' }
+          }));
+          console.log('✓ Created new IMP cycle:', impCycleData.cycleId, '→ dealNumber reset to 1');
+          return true;
+        } catch (err) {
+          console.error('Failed to initialize IMP cycle:', err);
+          return false;
+        } finally {
+          impCycleInitPromise = null;
+        }
+      })();
+
+      return impCycleInitPromise;
     };
 
     // Declare channels at top level for access in functions
@@ -747,59 +839,13 @@ export const tablePage = {
     const allSeatsOccupied = currentTable.players.north && currentTable.players.south && 
                              currentTable.players.east && currentTable.players.west;
     if (allSeatsOccupied) {
-      const players = getCurrentPlayers(currentTable);
-      
-      // Check for existing cycle
-      try {
-        const existingCycle = await findExistingCycle(ctx.supabaseClient, players);
-        
-        if (existingCycle) {
-          // Load existing cycle data
-          const loadedData = dbCycleToLocal(existingCycle);
-          if (loadedData) {
-            impCycleData = loadedData;
-            persistImpCycleData(tableId, impCycleData);
-            // Sync deal counter with IMP cycle - IMP is the authoritative source
-            dealNumber = impCycleData.currentGame;
-            localStorage.removeItem(`tableLastDealNumber:${tableId}`);
-            console.log('✓ Loaded existing IMP cycle:', impCycleData.cycleNumber, 'game', impCycleData.currentGame, '→ dealNumber synced to', dealNumber);
-          }
-        } else {
-          // Create new cycle
-          const newCycle = await createNewCycle(ctx.supabaseClient, players, tableId);
-          if (newCycle) {
-            const createdData = dbCycleToLocal(newCycle);
-            if (createdData) {
-              impCycleData = createdData;
-              persistImpCycleData(tableId, impCycleData);
-              // Fresh cycle always starts at game 1 = deal 1 (South dealer)
-              dealNumber = 1;
-              localStorage.removeItem(`tableLastDealNumber:${tableId}`);
-              console.log('✓ Created new IMP cycle:', impCycleData.cycleId, '→ dealNumber reset to 1');
-            }
-          } else {
-            console.warn('Failed to create IMP cycle in database, using local only');
-          }
-        }
-      } catch (err) {
-        console.error('Failed to initialize IMP cycle:', err);
-      }
+      await ensureImpCycleInitialized({ syncDealCounter: true });
     }
     
     // Ensure impCycleData has valid structure (fallback to default)
     if (!impCycleData || !impCycleData.table) {
       console.log('[IMP] Initializing default IMP cycle data');
-      impCycleData = {
-        cycleId: null,
-        cycleNumber: 1,
-        currentGame: 1,
-        table: {
-          A1: null, A2: null, A3: null, A4: null,
-          B1: null, B2: null, B3: null, B4: null,
-          C1: null, C2: null, C3: null, C4: null,
-          D1: null, D2: null, D3: null, D4: null
-        }
-      };
+      impCycleData = normalizeImpCycleData(null);
       persistImpCycleData(tableId, impCycleData);
     }
 
@@ -3324,6 +3370,7 @@ export const tablePage = {
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'room_seats', filter: `room_id=eq.${currentTable.id}` }, async () => {
           await loadRoomPlayers(ctx, currentTable.id);
+          await ensureImpCycleInitialized({ syncDealCounter: true });
           updateSeatLabels();
           await syncDealStateFromRoom();
           // Keep localStorage in sync so polling interval won't overwrite DB-sourced state

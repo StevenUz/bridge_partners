@@ -224,6 +224,47 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
     const renderImpTable = () => {
       const tableId = getTableId();
       console.log(`[IMP Table] Rendering for tableId: ${tableId}`);
+
+      const emptyTable = {
+        A1: null, A2: null, A3: null, A4: null,
+        B1: null, B2: null, B3: null, B4: null,
+        C1: null, C2: null, C3: null, C4: null,
+        D1: null, D2: null, D3: null, D4: null
+      };
+
+      const normalizeImpData = (rawData) => {
+        const base = {
+          cycleNumber: 1,
+          currentGame: 1,
+          table: { ...emptyTable }
+        };
+
+        if (!rawData || typeof rawData !== 'object') {
+          return base;
+        }
+
+        let rawTable = rawData.table ?? rawData.table_data ?? {};
+        if (typeof rawTable === 'string') {
+          try {
+            rawTable = JSON.parse(rawTable);
+          } catch {
+            rawTable = {};
+          }
+        }
+
+        if (!rawTable || typeof rawTable !== 'object' || Array.isArray(rawTable)) {
+          rawTable = {};
+        }
+
+        return {
+          ...base,
+          ...rawData,
+          table: {
+            ...emptyTable,
+            ...rawTable
+          }
+        };
+      };
       
       let impData = null;
       
@@ -231,7 +272,7 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
         const raw = localStorage.getItem(`tableImpCycle:${tableId}`);
         console.log(`[IMP Table] localStorage data:`, raw);
         if (raw) {
-          impData = JSON.parse(raw);
+          impData = normalizeImpData(JSON.parse(raw));
           console.log(`[IMP Table] Parsed data:`, impData);
         }
       } catch (e) {
@@ -240,11 +281,7 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
       
       // Default data if none exists
       if (!impData) {
-        impData = {
-          cycleNumber: 1,
-          currentGame: 1,
-          table: {}
-        };
+        impData = normalizeImpData(null);
       }
       
       // Get current player perspective (NS or EW) from sessionStorage
