@@ -678,45 +678,19 @@ export const tablePage = {
       tableTitleEl.textContent = fallbackTitle;
     }
 
-    // Load room name + initial game state async (don't block rendering)
+    // Load room name async (non-blocking – table name only, deal restoration happens below)
     if (ctx.supabaseClient && tableTitleEl) {
       ctx.supabaseClient
         .from('rooms')
-        .select('name, game_phase, deal_data')
+        .select('name')
         .eq('id', tableId)
         .single()
         .then(({ data, error }) => {
-          if (error) { console.warn('Failed to load room state', error); return; }
+          if (error) { console.warn('Failed to load room name', error); return; }
           if (data?.name) tableTitleEl.textContent = data.name;
-          // Restore game phase and deal data (for clients joining mid-game)
-          if (data?.game_phase) currentGamePhase = data.game_phase;
-          if (data?.game_phase === 'dealing' && data?.deal_data) {
-            // Only restore if all 4 seats are occupied; otherwise the deal is stale.
-            const seatsNow = currentTable.players;
-            const allFourSeated = seatsNow?.north && seatsNow?.south &&
-                                   seatsNow?.east && seatsNow?.west;
-            if (!allFourSeated) {
-              console.log('[Init] rooms.game_phase=dealing but table not full – clearing stale deal_data from DB');
-              currentGamePhase = 'waiting';
-              if (ctx.supabaseClient) {
-                ctx.supabaseClient
-                  .from('rooms')
-                  .update({ game_phase: 'waiting', deal_data: null })
-                  .eq('id', tableId)
-                  .then(({ error: e }) => {
-                    if (e) console.warn('[Init] Failed to clear stale deal from DB', e);
-                  });
-              }
-              return;
-            }
-            persistDealState(tableId, data.deal_data);
-            if (data.deal_data.hcpScores) hcpScores = data.deal_data.hcpScores;
-            console.log('✓ Loaded active deal from DB on page load');
-            renderDealAndBidding();
-          }
         })
         .catch(err => {
-          console.warn('Failed to load room state for table', err);
+          console.warn('Failed to load room name for table', err);
         });
     }
     
@@ -911,6 +885,44 @@ export const tablePage = {
                              currentTable.players.east && currentTable.players.west;
     if (allSeatsOccupied) {
       await ensureImpCycleInitialized({ syncDealCounter: true });
+
+      // NOW (after IMP cycle has set dealNumber authoritatively) restore active deal from DB.
+      // dealNumber is the canonical next-game number from the IMP cycle.
+      if (ctx.supabaseClient) {
+        try {
+          const { data: roomData, error: roomErr } = await ctx.supabaseClient
+            .from('rooms')
+            .select('game_phase, deal_data')
+            .eq('id', tableId)
+            .single();
+          if (!roomErr && roomData?.game_phase === 'dealing' && roomData?.deal_data) {
+            const dbDealNum = roomData.deal_data.dealNumber;
+            if (dbDealNum === dealNumber) {
+              // Deal matches current IMP game — restore it.
+              persistDealState(tableId, roomData.deal_data);
+              if (roomData.deal_data.hcpScores) hcpScores = roomData.deal_data.hcpScores;
+              currentGamePhase = 'dealing';
+              console.log(`✓ Restored active deal #${dbDealNum} from DB (matches IMP game)`);
+              renderDealAndBidding();
+            } else {
+              // Deal number mismatch — stale deal from a previous cycle/game. Clear it.
+              console.log(`[Init] Stale deal_data in DB (deal #${dbDealNum} vs IMP game #${dealNumber}) – clearing`);
+              currentGamePhase = 'waiting';
+              ctx.supabaseClient
+                .from('rooms')
+                .update({ game_phase: 'waiting', deal_data: null })
+                .eq('id', tableId)
+                .then(({ error: e }) => {
+                  if (e) console.warn('[Init] Failed to clear stale deal from DB', e);
+                });
+            }
+          } else if (roomData?.game_phase) {
+            currentGamePhase = roomData.game_phase;
+          }
+        } catch (err) {
+          console.warn('[Init] Failed to load room game state', err);
+        }
+      }
     } else {
       // Table is not fully occupied. Always clear any stale deal/play state so old
       // cards and wrong dealer/vulnerability are never shown to a lone seated player.
