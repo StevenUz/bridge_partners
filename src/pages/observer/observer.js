@@ -363,38 +363,46 @@ export const observerPage = {
 
     const tableTitle = host.querySelector('[data-table-title]');
     if (tableTitle) {
-      tableTitle.textContent = `${ctx.t('table')} ${tableId}`;
+      tableTitle.textContent = ctx.t('table');  // placeholder until DB responds
     }
 
-    // Load room name and player names from Supabase
+    // Load room state and player names from Supabase in parallel
     if (ctx.supabaseClient && tableId) {
-      ctx.supabaseClient
-        .from('rooms')
-        .select('name')
-        .eq('id', tableId)
-        .single()
-        .then(({ data }) => {
-          if (data?.name && tableTitle) {
-            currentTable.name = data.name;
-            tableTitle.textContent = `${ctx.t('table')} ${data.name}`;
-          }
-        });
+      Promise.all([
+        ctx.supabaseClient
+          .from('rooms')
+          .select('name, game_phase, deal_data')
+          .eq('id', tableId)
+          .single(),
+        ctx.supabaseClient
+          .from('room_seats')
+          .select('seat_position, profiles(username, display_name)')
+          .eq('room_id', tableId)
+      ]).then(([{ data: room }, { data: seats }]) => {
+        // Update room title — use the room name directly (it already contains "Table N")
+        if (room?.name && tableTitle) {
+          currentTable.name = room.name;
+          tableTitle.textContent = room.name;
+        }
 
-      ctx.supabaseClient
-        .from('room_seats')
-        .select('seat_position, profiles(username, display_name)')
-        .eq('room_id', tableId)
-        .then(({ data: seats }) => {
-          if (seats) {
-            seats.forEach((seat) => {
-              if (seat.seat_position && seat.profiles) {
-                currentTable.players[seat.seat_position] =
-                  seat.profiles.username || seat.profiles.display_name || '';
-              }
-            });
-            renderAllHands();
-          }
-        });
+        // Seed localStorage with the current deal so renderAllHands() can show cards.
+        // deal_data is non-null whenever a deal is in progress (dealing or playing phase).
+        if (room?.deal_data) {
+          persistDealState(tableId, room.deal_data);
+        }
+
+        // Populate player names
+        if (seats) {
+          seats.forEach((seat) => {
+            if (seat.seat_position && seat.profiles) {
+              currentTable.players[seat.seat_position] =
+                seat.profiles.username || seat.profiles.display_name || '';
+            }
+          });
+        }
+
+        renderAllHands();
+      });
     }
 
     // Add current observer to table if exists (FIRST)
