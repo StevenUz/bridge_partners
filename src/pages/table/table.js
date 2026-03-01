@@ -734,15 +734,10 @@ export const tablePage = {
 
       const syncDealNumberFromImpIfNeeded = (cycleData) => {
         if (!syncDealCounter) return;
-
-        const score = getImpProgressScore(cycleData);
-        const hasImpProgress = score > 0;
-        const hasDealProgress = !!loadDealState(currentTable.id) || !!loadLastDealNumber(currentTable.id);
-
-        if (hasImpProgress || !hasDealProgress) {
-          dealNumber = cycleData.currentGame;
-          localStorage.removeItem(`tableLastDealNumber:${currentTable.id}`);
-        }
+        // IMP cycle is the authoritative source for which game we're on.
+        // Always overwrite the stale tableLastDealNumber.
+        dealNumber = cycleData.currentGame || 1;
+        localStorage.removeItem(`tableLastDealNumber:${currentTable.id}`);
       };
 
       try {
@@ -779,15 +774,10 @@ export const tablePage = {
 
       const syncDealNumberFromImpIfNeeded = (cycleData) => {
         if (!syncDealCounter) return;
-
-        const score = getImpProgressScore(cycleData);
-        const hasImpProgress = score > 0;
-        const hasDealProgress = !!loadDealState(tableId) || !!loadLastDealNumber(tableId);
-
-        if (hasImpProgress || !hasDealProgress) {
-          dealNumber = cycleData.currentGame;
-          localStorage.removeItem(`tableLastDealNumber:${tableId}`);
-        }
+        // IMP cycle is the authoritative source for which game we're on.
+        // Always overwrite the stale tableLastDealNumber.
+        dealNumber = cycleData.currentGame || 1;
+        localStorage.removeItem(`tableLastDealNumber:${tableId}`);
       };
 
       if (impCycleInitPromise) return impCycleInitPromise;
@@ -936,6 +926,7 @@ export const tablePage = {
         localStorage.removeItem(`tableDealState:${currentTable.id}`);
         localStorage.removeItem(`tableBiddingState:${currentTable.id}`);
         localStorage.removeItem(`tablePlayState:${currentTable.id}`);
+        localStorage.removeItem(`tableLastDealNumber:${currentTable.id}`);
       } catch (err) {
         console.warn('[Init] Failed clearing stale deal state', err);
       }
