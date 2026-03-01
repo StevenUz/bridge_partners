@@ -29,14 +29,15 @@ function isHigherBid(candidate, lastBid) {
   return bidRank(candidate) > bidRank(lastBid);
 }
 
-// Sample table data (kept in sync with table view for demo)
+// Mutable table context, populated in render() from the URL and Supabase.
 const currentTable = {
-  id: 1,
+  id: null,
+  name: '',
   players: {
-    north: 'Marco',
-    south: 'Elena',
-    west: 'Ivan',
-    east: 'Maria'
+    north: '',
+    south: '',
+    east: '',
+    west: ''
   },
   observers: []
 };
@@ -71,9 +72,8 @@ function loadVulnerabilityState(tableId) {
 
 function getTableId() {
   const params = new URLSearchParams(window.location.search);
-  const idStr = params.get('id');
-  const id = Number(idStr);
-  return Number.isFinite(id) && id > 0 ? id : currentTable.id;
+  // Table IDs are UUIDs — return the raw string, never convert to Number.
+  return params.get('id') || null;
 }
 
 function loadDealState(tableId) {
@@ -96,6 +96,14 @@ function loadBiddingState(tableId) {
     console.warn('Failed to load bidding state', err);
     return null;
   }
+}
+
+function persistDealState(tableId, state) {
+  try { localStorage.setItem(`tableDealState:${tableId}`, JSON.stringify(state)); } catch (e) { /* ignore */ }
+}
+
+function persistBiddingState(tableId, state) {
+  try { localStorage.setItem(`tableBiddingState:${tableId}`, JSON.stringify(state)); } catch (e) { /* ignore */ }
 }
 
 function getCurrentObserver() {
@@ -344,11 +352,49 @@ export const observerPage = {
 
     // Setup table header
     const tableId = getTableId();
+
+    // Initialise mutable currentTable for this render so module-level helpers see the right state.
+    currentTable.id = tableId;
+    currentTable.name = '';
+    currentTable.players = { north: '', south: '', east: '', west: '' };
+    currentTable.observers = [];
+
     const currentObserver = getCurrentObserver();
-    
+
     const tableTitle = host.querySelector('[data-table-title]');
     if (tableTitle) {
       tableTitle.textContent = `${ctx.t('table')} ${tableId}`;
+    }
+
+    // Load room name and player names from Supabase
+    if (ctx.supabaseClient && tableId) {
+      ctx.supabaseClient
+        .from('rooms')
+        .select('name')
+        .eq('id', tableId)
+        .single()
+        .then(({ data }) => {
+          if (data?.name && tableTitle) {
+            currentTable.name = data.name;
+            tableTitle.textContent = `${ctx.t('table')} ${data.name}`;
+          }
+        });
+
+      ctx.supabaseClient
+        .from('room_seats')
+        .select('seat_position, profiles(username, display_name)')
+        .eq('room_id', tableId)
+        .then(({ data: seats }) => {
+          if (seats) {
+            seats.forEach((seat) => {
+              if (seat.seat_position && seat.profiles) {
+                currentTable.players[seat.seat_position] =
+                  seat.profiles.username || seat.profiles.display_name || '';
+              }
+            });
+            renderAllHands();
+          }
+        });
     }
 
     // Add current observer to table if exists (FIRST)
@@ -523,7 +569,7 @@ export const observerPage = {
     // Initial render
     renderAllHands();
 
-    // Sync with storage updates and polling
+    // Sync with storage updates (same-browser cross-tab) and light polling
     const storageHandler = (event) => {
       const currentTableId = getTableId();
       if (event.key === `tableDealState:${currentTableId}` || event.key === `tableBiddingState:${currentTableId}`) {
@@ -540,11 +586,45 @@ export const observerPage = {
 
     const syncInterval = setInterval(renderAllHands, 2000);
 
+    // Subscribe to the same Supabase Realtime channel as the table players so
+    // cross-device observation works without relying on localStorage.
+    let observerChannel = null;
+    if (ctx.supabaseClient && tableId) {
+      observerChannel = ctx.supabaseClient
+        .channel(`table-play-state-${tableId}`, {
+          config: { broadcast: { self: false } }
+        })
+        .on('broadcast', { event: 'deal-started' }, (payload) => {
+          if (!payload?.payload) return;
+          persistDealState(tableId, payload.payload);
+          renderAllHands();
+        })
+        .on('broadcast', { event: 'bidding-update' }, (payload) => {
+          if (!payload?.payload) return;
+          persistBiddingState(tableId, payload.payload);
+          renderAllHands();
+        })
+        .on('broadcast', { event: 'play-state-update' }, (payload) => {
+          if (!payload?.payload) return;
+          try {
+            localStorage.setItem(`tablePlayState:${tableId}`, JSON.stringify(payload.payload));
+          } catch (e) { /* ignore */ }
+          renderAllHands();
+        })
+        .on('broadcast', { event: 'round-reset' }, () => {
+          renderAllHands();
+        })
+        .subscribe();
+    }
+
     container.append(host);
 
     return () => {
       window.removeEventListener('storage', storageHandler);
       clearInterval(syncInterval);
+      if (observerChannel) {
+        ctx.supabaseClient?.removeChannel(observerChannel).catch(() => {});
+      }
     };
   }
 };
