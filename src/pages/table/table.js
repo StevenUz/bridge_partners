@@ -691,6 +691,24 @@ export const tablePage = {
           // Restore game phase and deal data (for clients joining mid-game)
           if (data?.game_phase) currentGamePhase = data.game_phase;
           if (data?.game_phase === 'dealing' && data?.deal_data) {
+            // Only restore if all 4 seats are occupied; otherwise the deal is stale.
+            const seatsNow = currentTable.players;
+            const allFourSeated = seatsNow?.north && seatsNow?.south &&
+                                   seatsNow?.east && seatsNow?.west;
+            if (!allFourSeated) {
+              console.log('[Init] rooms.game_phase=dealing but table not full – clearing stale deal_data from DB');
+              currentGamePhase = 'waiting';
+              if (ctx.supabaseClient) {
+                ctx.supabaseClient
+                  .from('rooms')
+                  .update({ game_phase: 'waiting', deal_data: null })
+                  .eq('id', tableId)
+                  .then(({ error: e }) => {
+                    if (e) console.warn('[Init] Failed to clear stale deal from DB', e);
+                  });
+              }
+              return;
+            }
             persistDealState(tableId, data.deal_data);
             if (data.deal_data.hcpScores) hcpScores = data.deal_data.hcpScores;
             console.log('✓ Loaded active deal from DB on page load');
@@ -903,10 +921,16 @@ export const tablePage = {
                              currentTable.players.east && currentTable.players.west;
     if (allSeatsOccupied) {
       await ensureImpCycleInitialized({ syncDealCounter: true });
-    } else if (storedDealAtLoad) {
-      // Table is not fully occupied but there is stale deal data from a previous session.
-      // Clear it so old cards and wrong dealer/vulnerability are not displayed.
-      console.log('[Init] Table not fully occupied – clearing stale deal state from previous session');
+    } else {
+      // Table is not fully occupied. Always clear any stale deal/play state so old
+      // cards and wrong dealer/vulnerability are never shown to a lone seated player.
+      const hasStaleState = !!(storedDealAtLoad ||
+        localStorage.getItem(`tableDealState:${currentTable.id}`) ||
+        localStorage.getItem(`tableBiddingState:${currentTable.id}`) ||
+        localStorage.getItem(`tablePlayState:${currentTable.id}`));
+      if (hasStaleState) {
+        console.log('[Init] Table not fully occupied – clearing stale deal state');
+      }
       try {
         localStorage.removeItem(`tableReadyState:${currentTable.id}`);
         localStorage.removeItem(`tableDealState:${currentTable.id}`);
