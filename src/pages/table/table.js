@@ -178,6 +178,34 @@ function normalizeImpCycleData(rawData) {
   };
 }
 
+function getImpProgressScore(rawData) {
+  const normalized = normalizeImpCycleData(rawData);
+  const filledCells = Object.values(normalized.table || {}).filter(
+    (value) => value !== null && value !== undefined
+  ).length;
+
+  return ((normalized.cycleNumber || 1) - 1) * 1600 +
+         ((normalized.currentGame || 1) - 1) * 100 +
+         filledCells;
+}
+
+function mergeImpCycleData(dbData, localData) {
+  const normalizedDb = normalizeImpCycleData(dbData);
+  const normalizedLocal = normalizeImpCycleData(localData);
+
+  const dbScore = getImpProgressScore(normalizedDb);
+  const localScore = getImpProgressScore(normalizedLocal);
+
+  if (localScore > dbScore) {
+    return {
+      ...normalizedLocal,
+      cycleId: normalizedDb.cycleId || normalizedLocal.cycleId || null
+    };
+  }
+
+  return normalizedDb;
+}
+
 function loadImpCycleData(tableId) {
   try {
     const raw = localStorage.getItem(`tableImpCycle:${tableId}`);
@@ -686,6 +714,19 @@ export const tablePage = {
       const players = getCurrentPlayers(currentTable);
       if (!players) return false;
 
+      const syncDealNumberFromImpIfNeeded = (cycleData) => {
+        if (!syncDealCounter) return;
+
+        const score = getImpProgressScore(cycleData);
+        const hasImpProgress = score > 0;
+        const hasDealProgress = !!loadDealState(currentTable.id) || !!loadLastDealNumber(currentTable.id);
+
+        if (hasImpProgress || !hasDealProgress) {
+          dealNumber = cycleData.currentGame;
+          localStorage.removeItem(`tableLastDealNumber:${currentTable.id}`);
+        }
+      };
+
       try {
         const existingCycle = await findExistingCycle(ctx.supabaseClient, players);
         if (!existingCycle) return false;
@@ -693,14 +734,11 @@ export const tablePage = {
         const loadedData = dbCycleToLocal(existingCycle);
         if (!loadedData) return false;
 
-        impCycleData = normalizeImpCycleData(loadedData);
+        const localStored = loadImpCycleData(currentTable.id);
+        impCycleData = mergeImpCycleData(loadedData, localStored);
 
         persistImpCycleData(currentTable.id, impCycleData);
-
-        if (syncDealCounter) {
-          dealNumber = impCycleData.currentGame;
-          localStorage.removeItem(`tableLastDealNumber:${currentTable.id}`);
-        }
+        syncDealNumberFromImpIfNeeded(impCycleData);
 
         window.dispatchEvent(new CustomEvent('imp-cycle-updated', {
           detail: { tableId: currentTable.id, source: 'db-sync' }
@@ -721,26 +759,54 @@ export const tablePage = {
       const players = getCurrentPlayers(currentTable);
       if (!players) return false;
 
+      const syncDealNumberFromImpIfNeeded = (cycleData) => {
+        if (!syncDealCounter) return;
+
+        const score = getImpProgressScore(cycleData);
+        const hasImpProgress = score > 0;
+        const hasDealProgress = !!loadDealState(tableId) || !!loadLastDealNumber(tableId);
+
+        if (hasImpProgress || !hasDealProgress) {
+          dealNumber = cycleData.currentGame;
+          localStorage.removeItem(`tableLastDealNumber:${tableId}`);
+        }
+      };
+
       if (impCycleInitPromise) return impCycleInitPromise;
 
       impCycleInitPromise = (async () => {
         try {
+          const localStored = loadImpCycleData(tableId);
+          const localScore = getImpProgressScore(localStored);
           const existingCycle = await findExistingCycle(ctx.supabaseClient, players);
           if (existingCycle) {
             const loadedData = dbCycleToLocal(existingCycle);
             if (loadedData) {
-              impCycleData = normalizeImpCycleData(loadedData);
+              impCycleData = mergeImpCycleData(loadedData, localStored);
               persistImpCycleData(tableId, impCycleData);
-              if (syncDealCounter) {
-                dealNumber = impCycleData.currentGame;
-                localStorage.removeItem(`tableLastDealNumber:${tableId}`);
-              }
+              syncDealNumberFromImpIfNeeded(impCycleData);
               window.dispatchEvent(new CustomEvent('imp-cycle-updated', {
                 detail: { tableId: currentTable.id, source: 'ensure-existing' }
               }));
               console.log('✓ Loaded existing IMP cycle:', impCycleData.cycleNumber, 'game', impCycleData.currentGame, '→ dealNumber synced to', dealNumber);
               return true;
             }
+          }
+
+          if (localScore > 0) {
+            impCycleData = normalizeImpCycleData(localStored);
+            persistImpCycleData(tableId, impCycleData);
+            syncDealNumberFromImpIfNeeded(impCycleData);
+            window.dispatchEvent(new CustomEvent('imp-cycle-updated', {
+              detail: { tableId: currentTable.id, source: 'ensure-local-fallback' }
+            }));
+            console.log('✓ Keeping local IMP cycle data (more progressed than DB)');
+            return true;
+          }
+
+          const viewerPosition = getPlayerPosition();
+          if (viewerPosition !== 'north') {
+            return false;
           }
 
           const newCycle = await createNewCycle(ctx.supabaseClient, players, tableId);
@@ -754,10 +820,7 @@ export const tablePage = {
 
           impCycleData = normalizeImpCycleData(createdData);
           persistImpCycleData(tableId, impCycleData);
-          if (syncDealCounter) {
-            dealNumber = 1;
-            localStorage.removeItem(`tableLastDealNumber:${tableId}`);
-          }
+          syncDealNumberFromImpIfNeeded(impCycleData);
           window.dispatchEvent(new CustomEvent('imp-cycle-updated', {
             detail: { tableId: currentTable.id, source: 'ensure-created' }
           }));
@@ -1169,6 +1232,64 @@ export const tablePage = {
       setTimeout(() => {
         ctx.navigate('/table');
       }, 150);
+    };
+
+    let lastHardResetToken = null;
+
+    const performHardTableReset = async ({ token = null, broadcast = false, skipDbCycleReset = false } = {}) => {
+      const resetToken = token ? String(token) : String(Date.now());
+      if (lastHardResetToken === resetToken) {
+        return;
+      }
+      lastHardResetToken = resetToken;
+
+      console.log('✓ Performing hard table reset, token=', resetToken);
+
+      dealNumber = 1;
+      impCycleData = createEmptyImpCycleData();
+      persistImpCycleData(currentTable.id, impCycleData);
+
+      try {
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith(`tableImpRecorded:${currentTable.id}:`))
+          .forEach((key) => localStorage.removeItem(key));
+
+        localStorage.removeItem(`tableLastDealNumber:${currentTable.id}`);
+        localStorage.removeItem(`tableVulnerability:${currentTable.id}`);
+      } catch (err) {
+        console.warn('Failed clearing local IMP reset keys', err);
+      }
+
+      if (!skipDbCycleReset) {
+        const players = getCurrentPlayers(currentTable);
+        if (players && ctx.supabaseClient) {
+          try {
+            const ok = await resetCyclesForPartnership(ctx.supabaseClient, players);
+            if (ok) console.log('✓ All IMP cycles for partnership deleted from DB');
+            else console.warn('Failed to delete IMP cycles for partnership');
+          } catch (err) {
+            console.warn('Failed to reset cycles for partnership', err);
+          }
+        }
+      }
+
+      clearTableState();
+      updateVulnerabilityIndicators(host, ctx, 1);
+      renderDealAndBidding();
+
+      window.dispatchEvent(new CustomEvent('imp-cycle-updated', {
+        detail: { tableId: currentTable.id, source: 'hard-reset' }
+      }));
+
+      if (broadcast && roomStateChannel) {
+        roomStateChannel.send({
+          type: 'broadcast',
+          event: 'imp-hard-reset',
+          payload: { tableId: currentTable.id, token: resetToken }
+        }).catch(err => {
+          console.warn('Failed to broadcast imp-hard-reset', err);
+        });
+      }
     };
 
     const showResetModal = () => {
@@ -3255,6 +3376,10 @@ export const tablePage = {
 
     // Listen for storage updates from other tabs to sync ready state in near real time
     const storageHandler = (event) => {
+      if (event.key === `tableHardResetTrigger:${currentTable.id}` && event.newValue) {
+        performHardTableReset({ token: event.newValue, broadcast: false, skipDbCycleReset: true });
+        return;
+      }
       if (event.key === `tableReadyState:${currentTable.id}`) {
         syncReadyUI();
       }
@@ -3309,23 +3434,9 @@ export const tablePage = {
     window.addEventListener('imp-cycle-reset', (event) => {
       const tableId = event?.detail?.tableId;
       if (!tableId || String(tableId) !== String(currentTable.id)) return;
-      console.log('✓ IMP cycle reset received (same tab)');
-      // Reset in-memory deal counter so dealer starts from South (deal 1)
-      dealNumber = 1;
-      // Delete ALL cycles for this partnership combo so the next session
-      // (whether same or swapped partners) starts completely fresh.
-      const players = getCurrentPlayers(currentTable);
-      if (players && ctx.supabaseClient) {
-        resetCyclesForPartnership(ctx.supabaseClient, players)
-          .then(ok => {
-            if (ok) console.log('✓ All IMP cycles for partnership deleted from DB');
-            else    console.warn('Failed to delete IMP cycles for partnership');
-          });
-      }
-      impCycleData = createEmptyImpCycleData();
-      // Note: clearTableState() should NOT be called here - IMP reset should only
-      // clear IMP data, not interrupt active gameplay. Deal/vulnerability reset is
-      // handled by header.js removing tableLastDealNumber and tableVulnerability.
+      const token = event?.detail?.token || String(Date.now());
+      console.log('✓ IMP hard reset received (same tab), token=', token);
+      performHardTableReset({ token, broadcast: true, skipDbCycleReset: false });
     });
 
     const syncDealStateFromRoom = async () => {
@@ -3450,6 +3561,12 @@ export const tablePage = {
           console.log('✓ Round reset broadcast received');
           resetForNextDeal();
           renderDealAndBidding();
+        })
+        .on('broadcast', { event: 'imp-hard-reset' }, (payload) => {
+          if (payload?.payload?.tableId !== currentTable.id) return;
+          const token = payload?.payload?.token || String(Date.now());
+          console.log('✓ IMP hard reset broadcast received, token=', token);
+          performHardTableReset({ token, broadcast: false, skipDbCycleReset: true });
         })
         .on('broadcast', { event: 'deal-started' }, (payload) => {
           if (!payload?.payload) return;

@@ -372,18 +372,26 @@ export function createHeader({ currentPath, language, onNavigate, onLanguageChan
       if (resetBtn) {
         resetBtn.addEventListener('click', () => {
           const currentTableId = getTableId();
+          const resetToken = String(Date.now());
           try {
             localStorage.removeItem(`tableImpCycle:${currentTableId}`);
             Object.keys(localStorage)
               .filter((key) => key.startsWith(`tableImpRecorded:${currentTableId}:`))
               .forEach((key) => localStorage.removeItem(key));
 
-            // Keep deal/vulnerability sequencing aligned with the IMP cycle after a reset.
+            // Full table reset: clear round state + sequencing to restart from game 1.
+            localStorage.removeItem(`tableReadyState:${currentTableId}`);
+            localStorage.removeItem(`tableDealState:${currentTableId}`);
+            localStorage.removeItem(`tableBiddingState:${currentTableId}`);
+            localStorage.removeItem(`tablePlayState:${currentTableId}`);
             localStorage.removeItem(`tableLastDealNumber:${currentTableId}`);
             localStorage.removeItem(`tableVulnerability:${currentTableId}`);
 
+            // Cross-tab reset signal (storage event in other tabs).
+            localStorage.setItem(`tableHardResetTrigger:${currentTableId}`, resetToken);
+
             // Notify the table page (same tab) to clear any in-memory cached IMP data.
-            window.dispatchEvent(new CustomEvent('imp-cycle-reset', { detail: { tableId: currentTableId } }));
+            window.dispatchEvent(new CustomEvent('imp-cycle-reset', { detail: { tableId: currentTableId, token: resetToken } }));
           } catch (err) {
             console.warn('Failed to reset IMP table', err);
           }
