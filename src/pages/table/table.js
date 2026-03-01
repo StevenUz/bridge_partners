@@ -3073,7 +3073,7 @@ export const tablePage = {
           const result = DetermineAuctionResult(calls, dealerSeat);
           console.log('[checkAuctionEndAndTransition] result=', result);
           if (result.result === 'PassedOut') {
-            // Passed-out deal: no contract, no play — but obligation still applies.
+            // Passed-out deal: no contract, no play.
             // Show the results screen so the score/IMP is calculated and recorded.
             playState.inProgress = false;
             playState.contract = null;
@@ -3081,8 +3081,8 @@ export const tablePage = {
             playState.tricksNS = 0;
             playState.tricksEW = 0;
             showDealResults();
-            // Use applyContractResult which properly sets currentTurn, currentTrick,
-            // playedCounts, broadcasts state, and syncs to database
+          } else if (result.result === 'Contract') {
+            // Normal auction ended with a contract — start the play phase.
             applyContractResult(result.contract, result.declarer, result.dummy, result.openingLeader);
           }
         }
@@ -3286,6 +3286,12 @@ export const tablePage = {
         updateButtons();
         updateTurnIndicator();
         updateActionIndicator();
+
+        // If bidding has already ended (e.g. restored from a broadcast on a non-local device),
+        // trigger the auction-end transition immediately rather than waiting for a button click.
+        if (biddingState.ended) {
+          checkAuctionEndAndTransition();
+        }
     };
 
     const syncReadyUI = () => {
