@@ -198,29 +198,31 @@ function mergeImpCycleData(dbData, localData) {
   const normalizedDb = normalizeImpCycleData(dbData);
   const normalizedLocal = normalizeImpCycleData(localData);
 
-  // DB is ALWAYS authoritative for currentGame and cycleNumber.
-  // These are controlled by admin resets – local cache must never override them.
-  // We only borrow individual table cell values from local when the cycle position
-  // matches (same cycleNumber + same currentGame), to cover the rare case where a
-  // result was recorded locally but not yet persisted to the DB.
-  const samePosition =
-    normalizedLocal.cycleNumber === normalizedDb.cycleNumber &&
-    normalizedLocal.currentGame === normalizedDb.currentGame;
-
-  if (samePosition) {
-    // Merge table cells: for each cell, prefer the non-null value; DB wins on conflict.
-    const mergedTable = { ...normalizedDb.table };
-    Object.keys(normalizedLocal.table).forEach((key) => {
-      if (mergedTable[key] === null && normalizedLocal.table[key] !== null) {
-        mergedTable[key] = normalizedLocal.table[key];
-      }
-    });
-    return { ...normalizedDb, table: mergedTable };
+  // If the DB has a different (newer) cycleId the DB represents a completely different
+  // cycle — either created after a reset or by another session.  DB must always win here.
+  if (normalizedDb.cycleId && normalizedDb.cycleId !== normalizedLocal.cycleId) {
+    return normalizedDb;
   }
 
-  // Positions differ → DB wins entirely (handles post-reset scenario where local
-  // cache is ahead of the freshly reset DB record).
-  return normalizedDb;
+  // Same cycle (cycleIds match, or local has no cycleId yet):
+  // DB wins only when DB is strictly AHEAD — meaning another player recorded a result
+  // and pushed the counter forward while this client was unaware.
+  const dbIsAhead =
+    normalizedDb.cycleNumber > normalizedLocal.cycleNumber ||
+    (normalizedDb.cycleNumber === normalizedLocal.cycleNumber &&
+     normalizedDb.currentGame > normalizedLocal.currentGame);
+
+  if (dbIsAhead) {
+    return normalizedDb;
+  }
+
+  // Local wins: local is at the same position OR one game ahead because North just
+  // recorded a result and the DB updateCycleAfterDeal is still in-flight.
+  // Always keep the cycleId from DB so future updates reach the right record.
+  return {
+    ...normalizedLocal,
+    cycleId: normalizedDb.cycleId || normalizedLocal.cycleId || null
+  };
 }
 
 function loadImpCycleData(tableId) {
