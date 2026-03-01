@@ -2823,6 +2823,9 @@ export const tablePage = {
     };
 
     const renderDealAndBidding = () => {
+      // Never overwrite the results screen.
+      if (viewingResults) return;
+
       const storedDeal = loadDealState(currentTable.id);
       const storedBidding = loadBiddingState(currentTable.id);
       if (!storedDeal) return; // No deal yet
@@ -3496,6 +3499,8 @@ export const tablePage = {
 
     const syncDealStateFromRoom = async () => {
       if (!ctx.supabaseClient || !currentTable?.id) return;
+      // Don't overwrite the results screen.
+      if (viewingResults) return;
       try {
         const { data, error } = await ctx.supabaseClient
           .from('rooms')
@@ -3636,6 +3641,9 @@ export const tablePage = {
               showDealResults();
               return;
             }
+            
+            // Never overwrite the results screen.
+            if (viewingResults) return;
             
             // Re-render UI
             renderDealAndBidding();
