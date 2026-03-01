@@ -23,10 +23,13 @@ function getDealerSeatForDeal(dealNum) {
 }
 
 function getNextDealNumber(tableId, fallback, impCurrentGame) {
+  // IMP cycle currentGame is the single source of truth for which game to play next.
+  // It must be checked FIRST — before storedDeal — because storedDeal can contain a
+  // stale (restored-from-DB) deal whose dealNumber is already behind the IMP counter
+  // after a reset, causing an unwanted +1 that shifts everything to the wrong game.
+  if (impCurrentGame) return impCurrentGame;
   const storedDeal = loadDealState(tableId);
   if (storedDeal?.dealNumber) return storedDeal.dealNumber + 1;
-  // IMP cycle currentGame is already the "next" game to play — authoritative over stale localStorage
-  if (impCurrentGame) return impCurrentGame;
   const lastDeal = loadLastDealNumber(tableId);
   if (lastDeal) return lastDeal + 1;
   return fallback || 1;
