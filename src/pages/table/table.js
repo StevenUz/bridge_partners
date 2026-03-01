@@ -195,16 +195,28 @@ function mergeImpCycleData(dbData, localData) {
   const normalizedDb = normalizeImpCycleData(dbData);
   const normalizedLocal = normalizeImpCycleData(localData);
 
-  const dbScore = getImpProgressScore(normalizedDb);
-  const localScore = getImpProgressScore(normalizedLocal);
+  // DB is ALWAYS authoritative for currentGame and cycleNumber.
+  // These are controlled by admin resets – local cache must never override them.
+  // We only borrow individual table cell values from local when the cycle position
+  // matches (same cycleNumber + same currentGame), to cover the rare case where a
+  // result was recorded locally but not yet persisted to the DB.
+  const samePosition =
+    normalizedLocal.cycleNumber === normalizedDb.cycleNumber &&
+    normalizedLocal.currentGame === normalizedDb.currentGame;
 
-  if (localScore > dbScore) {
-    return {
-      ...normalizedLocal,
-      cycleId: normalizedDb.cycleId || normalizedLocal.cycleId || null
-    };
+  if (samePosition) {
+    // Merge table cells: for each cell, prefer the non-null value; DB wins on conflict.
+    const mergedTable = { ...normalizedDb.table };
+    Object.keys(normalizedLocal.table).forEach((key) => {
+      if (mergedTable[key] === null && normalizedLocal.table[key] !== null) {
+        mergedTable[key] = normalizedLocal.table[key];
+      }
+    });
+    return { ...normalizedDb, table: mergedTable };
   }
 
+  // Positions differ → DB wins entirely (handles post-reset scenario where local
+  // cache is ahead of the freshly reset DB record).
   return normalizedDb;
 }
 
