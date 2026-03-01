@@ -903,6 +903,30 @@ export const tablePage = {
                              currentTable.players.east && currentTable.players.west;
     if (allSeatsOccupied) {
       await ensureImpCycleInitialized({ syncDealCounter: true });
+    } else if (storedDealAtLoad) {
+      // Table is not fully occupied but there is stale deal data from a previous session.
+      // Clear it so old cards and wrong dealer/vulnerability are not displayed.
+      console.log('[Init] Table not fully occupied – clearing stale deal state from previous session');
+      try {
+        localStorage.removeItem(`tableReadyState:${currentTable.id}`);
+        localStorage.removeItem(`tableDealState:${currentTable.id}`);
+        localStorage.removeItem(`tableBiddingState:${currentTable.id}`);
+        localStorage.removeItem(`tablePlayState:${currentTable.id}`);
+      } catch (err) {
+        console.warn('[Init] Failed clearing stale deal state', err);
+      }
+      currentDeal = null;
+      biddingState = null;
+      playState = {
+        contract: null, declarer: null, dummy: null,
+        openingLeader: null, currentTurn: null, currentTrick: [],
+        playedCounts: { north: 0, east: 0, south: 0, west: 0 },
+        firstLeadPlayed: false, trickLocked: false, lastTrickWinner: null,
+        tricksNS: 0, tricksEW: 0, inProgress: false,
+        hcpNS: 0, hcpEW: 0, fitsNS: 0, fitsEW: 0, originalHands: null
+      };
+      ['north', 'south', 'east', 'west'].forEach(s => { playerReadyState[s] = false; });
+      currentGamePhase = 'waiting';
     }
     
     // Ensure impCycleData has valid structure (fallback to default)
@@ -1335,8 +1359,12 @@ export const tablePage = {
     // Initialize vulnerability indicators for current state
     const storedDeal = loadDealState(currentTable.id);
     const lastDealNumber = loadLastDealNumber(currentTable.id);
-    const currentDealNumber = storedDeal?.dealNumber || lastDealNumber || dealNumber;
-    console.log(`[Init] currentDealNumber: ${currentDealNumber} (storedDeal=${storedDeal?.dealNumber}, lastDeal=${lastDealNumber}, fallback=${dealNumber})`);
+    // When the table is not fully occupied there is no active deal, so use the
+    // IMP cycle's currentGame as the reference (= the next game to be played).
+    const currentDealNumber = !allSeatsOccupied
+      ? (impCycleData?.currentGame || 1)
+      : (storedDeal?.dealNumber || lastDealNumber || dealNumber);
+    console.log(`[Init] currentDealNumber: ${currentDealNumber} (allSeatsOccupied=${allSeatsOccupied}, storedDeal=${storedDeal?.dealNumber}, lastDeal=${lastDealNumber}, fallback=${dealNumber})`);
     updateVulnerabilityIndicators(host, ctx, currentDealNumber);
 
     // Hydrate ready state from storage
