@@ -2046,12 +2046,19 @@ export const tablePage = {
       if (viewPosition === 'north') {
         recordImpResult(currentTable.id, impForNS, ctx.supabaseClient).then(() => {
           console.log('✓ IMP result recorded by North:', impForNS);
-          // Broadcast IMP update to sync all players' tables
+          // Broadcast full cycle state so non-North clients update immediately
+          // without waiting for the async DB commit (avoids DB race condition).
           if (roomStateChannel) {
             roomStateChannel.send({
               type: 'broadcast',
               event: 'imp-table-updated',
-              payload: { tableId: currentTable.id }
+              payload: {
+                tableId: currentTable.id,
+                currentGame: impCycleData.currentGame,
+                cycleNumber: impCycleData.cycleNumber,
+                cycleId: impCycleData.cycleId,
+                table: impCycleData.table
+              }
             }).catch(err => {
               console.warn('Failed to broadcast imp-table-updated', err);
             });
@@ -3066,11 +3073,14 @@ export const tablePage = {
           const result = DetermineAuctionResult(calls, dealerSeat);
           console.log('[checkAuctionEndAndTransition] result=', result);
           if (result.result === 'PassedOut') {
-            // Show passed out message, reset for next deal
-            const statusEl = host.querySelector('[data-status-text]');
-            if (statusEl) statusEl.textContent = 'Passed Out – No play.';
+            // Passed-out deal: no contract, no play — but obligation still applies.
+            // Show the results screen so the score/IMP is calculated and recorded.
             playState.inProgress = false;
-          } else if (result.result === 'Contract') {
+            playState.contract = null;
+            playState.declarer = null;
+            playState.tricksNS = 0;
+            playState.tricksEW = 0;
+            showDealResults();
             // Use applyContractResult which properly sets currentTurn, currentTrick,
             // playedCounts, broadcasts state, and syncs to database
             applyContractResult(result.contract, result.declarer, result.dummy, result.openingLeader);
@@ -3202,8 +3212,11 @@ export const tablePage = {
           });
 
           biddingState.passCount = type === 'pass' ? biddingState.passCount + 1 : 0;
-          biddingState.ended = biddingState.passCount >= 3 && biddingState.bids.some((b) => b.type === 'bid');
-          console.log('[bidding] call=', call, 'type=', type, 'passCount=', biddingState.passCount, 'ended=', biddingState.ended);
+          const hasBid = biddingState.bids.some((b) => b.type === 'bid');
+          // Bidding ends on 3 consecutive passes after at least one bid (normal),
+          // OR on 4 passes with no bids at all (all-pass, passed-out deal).
+          biddingState.ended = (biddingState.passCount >= 3 && hasBid) || biddingState.passCount >= 4;
+          console.log('[bidding] call=', call, 'type=', type, 'passCount=', biddingState.passCount, 'hasBid=', hasBid, 'ended=', biddingState.ended);
           biddingState.currentSeat = nextSeat(biddingState.currentSeat);
 
           commitState();
@@ -3752,14 +3765,39 @@ export const tablePage = {
           const payloadTableId = payload?.payload?.tableId;
           if (payloadTableId && String(payloadTableId) !== String(currentTable.id)) return;
 
-          console.log('✓ IMP table update broadcast received, syncing from DB');
-          const synced = await syncImpCycleFromDatabase({ syncDealCounter: true });
+          console.log('✓ IMP table update broadcast received');
 
-          if (!synced) {
-            window.dispatchEvent(new CustomEvent('imp-cycle-updated', {
-              detail: { tableId: currentTable.id, source: 'broadcast-fallback' }
-            }));
+          // If the broadcast contains the full cycle state, apply it directly.
+          // This eliminates the DB race condition where the DB async update hasn't
+          // committed yet when non-North clients try to sync from DB.
+          const p = payload?.payload;
+          if (p?.currentGame && p?.table) {
+            const broadcastData = {
+              cycleId: p.cycleId || impCycleData.cycleId,
+              cycleNumber: p.cycleNumber || 1,
+              currentGame: p.currentGame,
+              table: p.table
+            };
+            // Only apply if broadcast is at least as advanced as our local state
+            const broadcastIsAhead =
+              broadcastData.cycleNumber > impCycleData.cycleNumber ||
+              (broadcastData.cycleNumber === impCycleData.cycleNumber &&
+               broadcastData.currentGame >= impCycleData.currentGame);
+            if (broadcastIsAhead) {
+              impCycleData = normalizeImpCycleData(broadcastData);
+              persistImpCycleData(currentTable.id, impCycleData);
+              dealNumber = impCycleData.currentGame;
+              localStorage.removeItem(`tableLastDealNumber:${currentTable.id}`);
+              console.log('✓ Applied IMP state from broadcast: game', impCycleData.currentGame);
+              window.dispatchEvent(new CustomEvent('imp-cycle-updated', {
+                detail: { tableId: currentTable.id, source: 'broadcast-direct' }
+              }));
+            }
           }
+
+          // Also sync from DB in background to get authoritative state
+          // (handles case where non-North client reconnects after missing a broadcast)
+          syncImpCycleFromDatabase({ syncDealCounter: false }).catch(() => {});
         })
         .subscribe((status) => {
           console.log('✓ Room state channel status:', status);
@@ -4214,7 +4252,8 @@ export const tablePage = {
           });
 
           biddingState.passCount = type === 'pass' ? biddingState.passCount + 1 : 0;
-          biddingState.ended = biddingState.passCount >= 3 && biddingState.bids.some((b) => b.type === 'bid');
+          const hasBid = biddingState.bids.some((b) => b.type === 'bid');
+          biddingState.ended = (biddingState.passCount >= 3 && hasBid) || biddingState.passCount >= 4;
           biddingState.currentSeat = nextSeat(biddingState.currentSeat);
 
           commitState();
@@ -4258,9 +4297,13 @@ export const tablePage = {
             console.log('[auction] result=', result);
             
             if (result.result === 'PassedOut') {
-              const statusEl = host.querySelector('[data-status-text]');
-              if (statusEl) statusEl.textContent = 'Passed Out – No play.';
+              // Passed-out deal: no contract, no play — obligation still applies.
               playState.inProgress = false;
+              playState.contract = null;
+              playState.declarer = null;
+              playState.tricksNS = 0;
+              playState.tricksEW = 0;
+              showDealResults();
             } else if (result.result === 'Contract') {
               applyContractResult(result.contract, result.declarer, result.dummy, result.openingLeader);
             } else if (biddingState.ended) {
