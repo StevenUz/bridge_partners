@@ -622,7 +622,42 @@ export const observerPage = {
         .on('broadcast', { event: 'round-reset' }, () => {
           renderAllHands();
         })
-        .subscribe();
+        .on('broadcast', { event: 'request-observer-announce' }, () => {
+          // A player has joined/refreshed and wants to know who is observing.
+          if (currentObserver?.name && observerChannel) {
+            observerChannel.send({
+              type: 'broadcast',
+              event: 'observer-joined',
+              payload: { name: currentObserver.name }
+            }).catch(() => {});
+          }
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED' && currentObserver?.name) {
+            // Announce presence to all players on the table channel.
+            observerChannel.send({
+              type: 'broadcast',
+              event: 'observer-joined',
+              payload: { name: currentObserver.name }
+            }).catch(() => {});
+          }
+        });
+    }
+
+    // Leave observer button: broadcast observer-left before navigating away.
+    // (The existing leaveBtn handler is set up earlier; we patch it here via the
+    //  channel reference which is now available.)
+    const leaveBtnForBroadcast = host.querySelector('[data-action="leave-observer"]');
+    if (leaveBtnForBroadcast && currentObserver?.name) {
+      leaveBtnForBroadcast.addEventListener('click', () => {
+        if (observerChannel) {
+          observerChannel.send({
+            type: 'broadcast',
+            event: 'observer-left',
+            payload: { name: currentObserver.name }
+          }).catch(() => {});
+        }
+      }, { once: true });
     }
 
     container.append(host);
@@ -631,6 +666,13 @@ export const observerPage = {
       window.removeEventListener('storage', storageHandler);
       clearInterval(syncInterval);
       if (observerChannel) {
+        if (currentObserver?.name) {
+          observerChannel.send({
+            type: 'broadcast',
+            event: 'observer-left',
+            payload: { name: currentObserver.name }
+          }).catch(() => {});
+        }
         ctx.supabaseClient?.removeChannel(observerChannel).catch(() => {});
       }
     };

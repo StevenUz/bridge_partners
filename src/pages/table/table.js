@@ -3805,8 +3805,31 @@ export const tablePage = {
           // (handles case where non-North client reconnects after missing a broadcast)
           syncImpCycleFromDatabase({ syncDealCounter: false }).catch(() => {});
         })
+        .on('broadcast', { event: 'observer-joined' }, (payload) => {
+          const name = payload?.payload?.name;
+          if (!name) return;
+          if (!currentTable.observers.includes(name)) {
+            currentTable.observers.push(name);
+          }
+          refreshObserversIndicator();
+        })
+        .on('broadcast', { event: 'observer-left' }, (payload) => {
+          const name = payload?.payload?.name;
+          if (!name) return;
+          const idx = currentTable.observers.indexOf(name);
+          if (idx > -1) currentTable.observers.splice(idx, 1);
+          refreshObserversIndicator();
+        })
         .subscribe((status) => {
           console.log('✓ Room state channel status:', status);
+          if (status === 'SUBSCRIBED') {
+            // Ask any observers already on the channel to re-announce themselves.
+            roomStateChannel.send({
+              type: 'broadcast',
+              event: 'request-observer-announce',
+              payload: {}
+            }).catch(() => {});
+          }
         });
     }
 
@@ -3859,34 +3882,37 @@ export const tablePage = {
     // Chat toggle button in header
     let chatToggleClick = null; // Will be set after chat drawer is created
 
-    // Observers indicator in header
+    // Observers indicator in header — renders once and is refreshed via refreshObserversIndicator()
     const observersIndicator = host.querySelector('[data-observers-indicator]');
-    if (observersIndicator) {
+
+    const refreshObserversIndicator = () => {
+      if (!observersIndicator) return;
       const hasObservers = currentTable.observers.length > 0;
       const observerNames = hasObservers ? currentTable.observers.join(', ') : 'No observers';
-      
-      // Create tooltip element
+
+      // Rebuild inner HTML (tooltip included)
       const tooltip = document.createElement('div');
       tooltip.className = 'observers-tooltip';
       tooltip.textContent = observerNames;
-      
+
       observersIndicator.innerHTML = `<i class="bi ${hasObservers ? 'bi-eye-fill' : 'bi-eye'}"></i>`;
       observersIndicator.className = `observers-indicator ${hasObservers ? 'has-observers' : ''}`;
       observersIndicator.appendChild(tooltip);
-      
+
       // Tooltip show/hide on hover
       observersIndicator.addEventListener('mouseenter', () => {
         tooltip.style.opacity = '1';
         tooltip.style.visibility = 'visible';
         tooltip.style.transform = 'translateX(-50%) translateY(0)';
       });
-      
       observersIndicator.addEventListener('mouseleave', () => {
         tooltip.style.opacity = '0';
         tooltip.style.visibility = 'hidden';
         tooltip.style.transform = 'translateX(-50%) translateY(8px)';
       });
-    }
+    };
+
+    refreshObserversIndicator();
 
     // Deal button
     const dealBtn = persistentDealBtn || host.querySelector('[data-action="deal-cards"]');
