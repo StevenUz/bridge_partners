@@ -3506,6 +3506,35 @@ export const tablePage = {
 
         currentGamePhase = data.game_phase || 'waiting';
         if (currentGamePhase === 'dealing' && data.deal_data) {
+          // Guard: only restore a deal when all 4 seats are occupied.
+          const p = currentTable.players;
+          const allFour = p?.north && p?.south && p?.east && p?.west;
+          if (!allFour) {
+            console.log('[syncDealStateFromRoom] Not all seats occupied – ignoring stale deal from DB');
+            currentGamePhase = 'waiting';
+            ctx.supabaseClient
+              .from('rooms')
+              .update({ game_phase: 'waiting', deal_data: null })
+              .eq('id', currentTable.id)
+              .then(({ error: e }) => {
+                if (e) console.warn('[syncDealStateFromRoom] Failed to clear stale deal', e);
+              });
+            return;
+          }
+          // Extra guard: deal number must match the IMP-cycle authoritative game.
+          const dbDealNum = data.deal_data.dealNumber;
+          if (dbDealNum !== dealNumber) {
+            console.log(`[syncDealStateFromRoom] Stale deal #${dbDealNum} vs IMP game #${dealNumber} – clearing`);
+            currentGamePhase = 'waiting';
+            ctx.supabaseClient
+              .from('rooms')
+              .update({ game_phase: 'waiting', deal_data: null })
+              .eq('id', currentTable.id)
+              .then(({ error: e }) => {
+                if (e) console.warn('[syncDealStateFromRoom] Failed to clear stale deal', e);
+              });
+            return;
+          }
           persistDealState(currentTable.id, data.deal_data);
           if (data.deal_data.hcpScores) {
             hcpScores = data.deal_data.hcpScores;
@@ -3527,6 +3556,23 @@ export const tablePage = {
           currentGamePhase = room.game_phase || 'waiting';
           console.log(`[Rooms change] game_phase=${currentGamePhase}`);
           if (currentGamePhase === 'dealing' && room.deal_data) {
+            // Guard: only render when all 4 seats are occupied.
+            const p = currentTable.players;
+            const allFour = p?.north && p?.south && p?.east && p?.west;
+            if (!allFour) {
+              console.log('[Rooms change] Not all seats occupied – ignoring incoming deal');
+              currentGamePhase = 'waiting';
+              if (ctx.supabaseClient) {
+                ctx.supabaseClient
+                  .from('rooms')
+                  .update({ game_phase: 'waiting', deal_data: null })
+                  .eq('id', currentTable.id)
+                  .then(({ error: e }) => {
+                    if (e) console.warn('[Rooms change] Failed to clear stale deal', e);
+                  });
+              }
+              return;
+            }
             // Persist deal data so renderDealAndBidding can read it
             persistDealState(currentTable.id, room.deal_data);
             if (room.deal_data.hcpScores) hcpScores = room.deal_data.hcpScores;
