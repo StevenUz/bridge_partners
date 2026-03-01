@@ -22,9 +22,11 @@ function getDealerSeatForDeal(dealNum) {
   return seatOrder[index];
 }
 
-function getNextDealNumber(tableId, fallback) {
+function getNextDealNumber(tableId, fallback, impCurrentGame) {
   const storedDeal = loadDealState(tableId);
   if (storedDeal?.dealNumber) return storedDeal.dealNumber + 1;
+  // IMP cycle currentGame is already the "next" game to play — authoritative over stale localStorage
+  if (impCurrentGame) return impCurrentGame;
   const lastDeal = loadLastDealNumber(tableId);
   if (lastDeal) return lastDeal + 1;
   return fallback || 1;
@@ -1263,7 +1265,7 @@ export const tablePage = {
       updatePlayTurnIndicator();
       updateActionIndicator();
       updateTrickCounters();
-      updateVulnerabilityIndicators(host, ctx, getNextDealNumber(currentTable.id, dealNumber));
+      updateVulnerabilityIndicators(host, ctx, getNextDealNumber(currentTable.id, dealNumber, impCycleData?.currentGame));
       syncPlayStateToDatabase();
     };
 
@@ -1386,12 +1388,11 @@ export const tablePage = {
     // Initialize vulnerability indicators for current state
     const storedDeal = loadDealState(currentTable.id);
     const lastDealNumber = loadLastDealNumber(currentTable.id);
-    // When the table is not fully occupied there is no active deal, so use the
-    // IMP cycle's currentGame as the reference (= the next game to be played).
-    const currentDealNumber = !allSeatsOccupied
-      ? (impCycleData?.currentGame || 1)
-      : (storedDeal?.dealNumber || lastDealNumber || dealNumber);
-    console.log(`[Init] currentDealNumber: ${currentDealNumber} (allSeatsOccupied=${allSeatsOccupied}, storedDeal=${storedDeal?.dealNumber}, lastDeal=${lastDealNumber}, fallback=${dealNumber})`);
+    // IMP cycle currentGame is the authoritative "next game to play" — use it before stale localStorage.
+    // storedDeal.dealNumber takes priority only when a deal is actively in progress.
+    const currentDealNumber = storedDeal?.dealNumber
+      || (impCycleData?.currentGame || lastDealNumber || dealNumber || 1);
+    console.log(`[Init] currentDealNumber: ${currentDealNumber} (storedDeal=${storedDeal?.dealNumber}, imp.currentGame=${impCycleData?.currentGame}, lastDeal=${lastDealNumber}, fallback=${dealNumber})`);
     updateVulnerabilityIndicators(host, ctx, currentDealNumber);
 
     // Hydrate ready state from storage
@@ -2297,7 +2298,7 @@ export const tablePage = {
           console.log('Player marked ready for next deal:', mySeat, 'Current ready state:', playerReadyState);
           
           // Dealer should render the Deal screen immediately, others wait
-          const nextDealNumber = getNextDealNumber(currentTable.id, dealNumber);
+          const nextDealNumber = getNextDealNumber(currentTable.id, dealNumber, impCycleData?.currentGame);
           const dealerSeat = getDealerSeatForDeal(nextDealNumber);
           const isDealer = dealerSeat === mySeat;
           
@@ -2782,7 +2783,7 @@ export const tablePage = {
 
       const storedBidding = loadBiddingState(currentTable.id);
       const storedDeal = loadDealState(currentTable.id);
-      const nextDealNumber = getNextDealNumber(currentTable.id, dealNumber);
+      const nextDealNumber = getNextDealNumber(currentTable.id, dealNumber, impCycleData?.currentGame);
       const dealerSeat = getDealerSeatForDeal(nextDealNumber);
 
       if (playState?.inProgress) {
@@ -3357,7 +3358,9 @@ export const tablePage = {
 
       const storedDeal = loadDealState(currentTable.id);
       const lastDealNumber = loadLastDealNumber(currentTable.id);
-      const currentDealNumber = storedDeal?.dealNumber || lastDealNumber || dealNumber;
+      // IMP cycle is authoritative over stale lastDealNumber when no deal is in progress
+      const currentDealNumber = storedDeal?.dealNumber
+        || (impCycleData?.currentGame || lastDealNumber || dealNumber || 1);
       updateVulnerabilityIndicators(host, ctx, currentDealNumber);
     };
     
@@ -3365,7 +3368,7 @@ export const tablePage = {
     const checkAllPlayersReady = () => {
       const allReady = Object.values(playerReadyState).every((r) => r === true);
       const dealBtn = host.querySelector('[data-action="deal-cards"]');
-      const nextDealNumber = getNextDealNumber(currentTable.id, dealNumber);
+      const nextDealNumber = getNextDealNumber(currentTable.id, dealNumber, impCycleData?.currentGame);
       const dealerSeat = getDealerSeatForDeal(nextDealNumber);
       const isDealerViewer = dealerSeat === viewerSeat;
 
@@ -3830,9 +3833,9 @@ export const tablePage = {
 
     if (dealBtn) {
       dealBtn.addEventListener('click', () => {
-        // Load current deal number from storage to ensure sync
-        const nextDealNumber = getNextDealNumber(currentTable.id, dealNumber);
-        console.log(`[Deal Click] dealNumber before: ${dealNumber}, nextDealNumber from storage: ${nextDealNumber}`);
+        // Load current deal number from storage to ensure sync; IMP cycle is authoritative
+        const nextDealNumber = getNextDealNumber(currentTable.id, dealNumber, impCycleData?.currentGame);
+        console.log(`[Deal Click] dealNumber before: ${dealNumber}, nextDealNumber from storage: ${nextDealNumber}, imp.currentGame: ${impCycleData?.currentGame}`);
         dealNumber = nextDealNumber;
         console.log(`[Deal] Starting deal ${dealNumber}`);
 
