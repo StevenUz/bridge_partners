@@ -256,10 +256,12 @@ erDiagram
 
    ```env
    VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co
-   VITE_SUPABASE_ANON_KEY=<your-anon-key>
+    VITE_SUPABASE_PUBLISHABLE_KEY=<your-publishable-key>
+    # or (legacy): VITE_SUPABASE_ANON_KEY=<your-anon-key>
    ```
 
    Find both values in your Supabase project: **Settings → API**.
+    For Netlify deployment, set the same variables in **Site settings → Environment variables** and trigger a new deploy.
 
 4. **Apply database migrations**
 
@@ -310,7 +312,7 @@ bridge_partners/
 ├── vite.config.js                # Vite config: appType spa, port 5000, @ alias
 ├── netlify.toml                  # Netlify deploy config (SPA history fallback)
 ├── package.json                  # Node dependencies and npm scripts
-├── .env.local                    # (git-ignored) Supabase URL + anon key
+├── .env.local                    # (git-ignored) Supabase URL + publishable/anon key
 │
 ├── migrations/                   # Numbered SQL migration files applied to Supabase
 │   └── NN_description.sql
