@@ -17,7 +17,20 @@ function escapeHtml(str) {
 
 // Simple in-memory chat for the lobby
 const lobbyChatMessages = [];
+const MAX_CHAT_MESSAGES = 15;
 let seedingInProgress = false;
+
+function normalizeChatMessage(msg) {
+  return {
+    id: msg.id,
+    author: msg.author || 'Unknown',
+    text: msg.text || msg.message || ''
+  };
+}
+
+function trimChatMessages(list) {
+  while (list.length > MAX_CHAT_MESSAGES) list.shift();
+}
 
 export const lobbyPage = {
   path: '/lobby',
@@ -95,25 +108,98 @@ export const lobbyPage = {
     const chatInput = chatPanel.querySelector('[data-chat-input]');
     const chatSend = chatPanel.querySelector('[data-chat-send]');
 
+    const getChatAuthor = async () => {
+      try {
+        const currentUser = JSON.parse(sessionStorage.getItem('currentUser') || 'null');
+        if (currentUser?.username) return currentUser.username;
+        if (currentUser?.display_name) return currentUser.display_name;
+      } catch (err) {
+        console.warn('Failed to read current user for chat author', err);
+      }
+
+      const profile = await getCurrentProfile(ctx);
+      if (profile?.username) return profile.username;
+      if (profile?.display_name) return profile.display_name;
+      return 'Player';
+    };
+
+    const applyLobbyMessages = (rows) => {
+      const normalized = (rows || []).map(normalizeChatMessage);
+      lobbyChatMessages.splice(0, lobbyChatMessages.length, ...normalized);
+      trimChatMessages(lobbyChatMessages);
+    };
+
+    const loadLobbyChatMessages = async () => {
+      if (!ctx.supabaseClient) return;
+
+      const { data, error } = await ctx.supabaseClient
+        .from('chat_messages')
+        .select('id, scope, room_id, author, message, created_at')
+        .eq('scope', 'lobby')
+        .is('room_id', null)
+        .order('created_at', { ascending: true })
+        .limit(MAX_CHAT_MESSAGES);
+
+      if (error) {
+        console.error('Failed to load lobby chat messages', error);
+        return;
+      }
+
+      applyLobbyMessages(data || []);
+    };
+
     function renderChat() {
-      const lastMessages = lobbyChatMessages.slice(-15);
+      const lastMessages = lobbyChatMessages.slice(-MAX_CHAT_MESSAGES);
       chatBody.innerHTML = lastMessages
         .map((msg) => `<div class="chat-message"><strong>${escapeHtml(msg.author)}:</strong> ${escapeHtml(msg.text)}</div>`)
         .join('');
       chatBody.scrollTop = chatBody.scrollHeight;
     }
 
-    function addMessage(text) {
+    async function addMessage(text) {
       if (!text) return;
-      lobbyChatMessages.push({ author: 'You', text });
-      if (lobbyChatMessages.length > 15) lobbyChatMessages.shift();
-      renderChat();
+
+      if (!ctx.supabaseClient) {
+        lobbyChatMessages.push({ author: 'You', text });
+        trimChatMessages(lobbyChatMessages);
+        renderChat();
+        return;
+      }
+
+      let profileId = null;
+      try {
+        const currentUser = JSON.parse(sessionStorage.getItem('currentUser') || 'null');
+        profileId = currentUser?.id || null;
+      } catch (err) {
+        console.warn('Failed to read current user id for chat message', err);
+      }
+
+      if (!profileId) {
+        const profile = await getCurrentProfile(ctx);
+        profileId = profile?.id || null;
+      }
+
+      const payload = {
+        scope: 'lobby',
+        room_id: null,
+        profile_id: profileId,
+        author: await getChatAuthor(),
+        message: text
+      };
+
+      const { error } = await ctx.supabaseClient
+        .from('chat_messages')
+        .insert(payload);
+
+      if (error) {
+        console.error('Failed to send lobby chat message', error);
+      }
     }
 
-    chatSend.addEventListener('click', () => {
+    chatSend.addEventListener('click', async () => {
       const value = chatInput.value.trim().slice(0, 50);
       if (!value) return;
-      addMessage(value);
+      await addMessage(value);
       chatInput.value = '';
     });
 
@@ -124,6 +210,9 @@ export const lobbyPage = {
       }
     });
 
+    if (ctx.supabaseClient) {
+      await loadLobbyChatMessages();
+    }
     renderChat();
     applyTranslations(chatPanel, ctx.language);
 
@@ -152,6 +241,21 @@ export const lobbyPage = {
         })
         .subscribe();
 
+      const chatChannel = ctx.supabaseClient
+        .channel('chat-lobby-page')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: 'scope=eq.lobby' }, (payload) => {
+          if (payload.new?.scope !== 'lobby' || payload.new?.room_id !== null) return;
+
+          const message = normalizeChatMessage(payload.new);
+          const alreadyExists = message.id && lobbyChatMessages.some((item) => item.id === message.id);
+          if (alreadyExists) return;
+
+          lobbyChatMessages.push(message);
+          trimChatMessages(lobbyChatMessages);
+          renderChat();
+        })
+        .subscribe();
+
       // Fallback: refresh when tab becomes visible (catches missed realtime events)
       const onVisibilityChange = async () => {
         if (document.visibilityState === 'visible') {
@@ -169,6 +273,7 @@ export const lobbyPage = {
 
       return () => {
         ctx.supabaseClient.removeChannel(channel);
+        ctx.supabaseClient.removeChannel(chatChannel);
         document.removeEventListener('visibilitychange', onVisibilityChange);
         clearInterval(pollInterval);
       };

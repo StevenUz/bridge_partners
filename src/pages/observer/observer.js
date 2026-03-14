@@ -18,6 +18,7 @@ function escapeHtml(str) {
 
 const seatOrder = ['south', 'west', 'north', 'east'];
 const suitOrder = ['C', 'D', 'H', 'S', 'NT'];
+const MAX_CHAT_MESSAGES = 15;
 
 function sameTeam(a, b) {
   const ns = ['north', 'south'];
@@ -183,7 +184,7 @@ function updateVulnerabilityIndicators(host, ctx, dealNum) {
 export const observerPage = {
   path: '/observer',
   name: 'observer',
-  render(container, ctx) {
+  async render(container, ctx) {
     const host = document.createElement('section');
     host.innerHTML = template;
 
@@ -475,13 +476,8 @@ export const observerPage = {
     }
 
     // Chat drawer for observer - two tabs (table / lobby)
-    const tableChatMessages = [
-      { author: 'Ivan', text: 'Good luck!' },
-      { author: 'Maria', text: "Let's play fair." }
-    ];
-    const lobbyChatMessages = [
-      { author: 'System', text: ctx.t('navObserver') }
-    ];
+    const tableChatMessages = [];
+    const lobbyChatMessages = [];
     let chatContainer = host.querySelector('[data-chat-container]');
     const chatDrawer = document.createElement('div');
     chatDrawer.className = 'chat-drawer';
@@ -514,25 +510,132 @@ export const observerPage = {
 
     let isChatOpen = false;
     let activeTab = 'table';
+    let chatTableChannel = null;
+    let chatLobbyChannel = null;
     const chatBody = chatDrawer.querySelector('[data-chat-body]');
     const chatInput = chatDrawer.querySelector('[data-chat-input]');
     const chatSend = chatDrawer.querySelector('[data-chat-send]');
+    const chatHeader = chatDrawer.querySelector('[data-chat-header]');
     const tabButtons = chatDrawer.querySelectorAll('[data-chat-tab]');
+
+    const trimMessages = (list) => {
+      while (list.length > MAX_CHAT_MESSAGES) list.shift();
+    };
+
+    const normalizeMessage = (msg) => ({
+      id: msg.id,
+      author: msg.author || 'Unknown',
+      text: msg.text || msg.message || ''
+    });
+
+    const applyMessages = (target, rows) => {
+      const normalized = rows.map(normalizeMessage);
+      target.splice(0, target.length, ...normalized);
+      trimMessages(target);
+    };
 
     const renderChat = () => {
       const source = activeTab === 'table' ? tableChatMessages : lobbyChatMessages;
-      chatBody.innerHTML = source
+      const lastMessages = source.slice(-MAX_CHAT_MESSAGES);
+      chatBody.innerHTML = lastMessages
         .map((msg) => `<div class="chat-message"><strong>${escapeHtml(msg.author)}:</strong> ${escapeHtml(msg.text)}</div>`)
         .join('');
       chatBody.scrollTop = chatBody.scrollHeight;
+      chatHeader.classList.remove('blink');
     };
 
-    const addMessage = (text) => {
+    const getChatAuthor = () => {
+      if (currentObserver?.name) {
+        return currentObserver.name;
+      }
+      try {
+        const storedSessionUser = sessionStorage.getItem('currentUser');
+        if (storedSessionUser) {
+          const currentUser = JSON.parse(storedSessionUser);
+          if (currentUser?.username) return currentUser.username;
+          if (currentUser?.display_name) return currentUser.display_name;
+        }
+
+        const currentUser = JSON.parse(sessionStorage.getItem('currentUser') || 'null');
+        if (currentUser?.username) return currentUser.username;
+        if (currentUser?.display_name) return currentUser.display_name;
+      } catch (err) {
+        console.warn('Failed to read current user', err);
+      }
+      return 'Observer';
+    };
+
+    const loadChatMessages = async (scope) => {
+      if (!ctx.supabaseClient) return;
+      const query = ctx.supabaseClient
+        .from('chat_messages')
+        .select('id, scope, room_id, author, message, created_at')
+        .eq('scope', scope)
+        .order('created_at', { ascending: true })
+        .limit(MAX_CHAT_MESSAGES);
+
+      if (scope === 'table') {
+        query.eq('room_id', tableId);
+      }
+
+      if (scope === 'lobby') {
+        query.is('room_id', null);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('Failed to load chat messages', error);
+        return;
+      }
+
+      if (scope === 'table') {
+        applyMessages(tableChatMessages, data || []);
+      } else {
+        applyMessages(lobbyChatMessages, data || []);
+      }
+    };
+
+    const addMessage = async (text) => {
       if (!text) return;
-      const target = activeTab === 'table' ? tableChatMessages : lobbyChatMessages;
-      target.push({ author: currentObserver ? currentObserver.name : 'You', text });
-      if (target.length > 50) target.shift();
-      renderChat();
+
+      if (!ctx.supabaseClient) {
+        const target = activeTab === 'table' ? tableChatMessages : lobbyChatMessages;
+        target.push({ author: currentObserver ? currentObserver.name : 'You', text });
+        trimMessages(target);
+        renderChat();
+        return;
+      }
+
+      let profileId = null;
+      try {
+        const storedSessionUser = sessionStorage.getItem('currentUser');
+        if (storedSessionUser) {
+          const sessionUser = JSON.parse(storedSessionUser);
+          profileId = sessionUser?.id || null;
+        }
+        if (!profileId) {
+          const currentUser = JSON.parse(sessionStorage.getItem('currentUser') || 'null');
+          profileId = currentUser?.id || null;
+        }
+      } catch (err) {
+        console.warn('Failed to read current user', err);
+      }
+
+      const payload = {
+        scope: activeTab,
+        room_id: activeTab === 'table' ? tableId : null,
+        profile_id: profileId,
+        author: getChatAuthor(),
+        message: text
+      };
+
+      const { error } = await ctx.supabaseClient
+        .from('chat_messages')
+        .insert(payload);
+
+      if (error) {
+        console.error('Failed to send chat message', error);
+      }
     };
 
     tabButtons.forEach((btn) => {
@@ -543,10 +646,10 @@ export const observerPage = {
       });
     });
 
-    chatSend.addEventListener('click', () => {
+    chatSend.addEventListener('click', async () => {
       const value = chatInput.value.trim().slice(0, 50);
       if (!value) return;
-      addMessage(value);
+      await addMessage(value);
       chatInput.value = '';
     });
 
@@ -575,6 +678,45 @@ export const observerPage = {
     // Initialize chat hidden
     if (chatContainer) {
       chatContainer.classList.remove('open');
+    }
+
+    if (ctx.supabaseClient) {
+      await loadChatMessages('table');
+      await loadChatMessages('lobby');
+
+      chatTableChannel = ctx.supabaseClient
+        .channel(`chat-table-observer-${tableId}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${tableId}` }, (payload) => {
+          if (payload.new?.scope !== 'table') return;
+          const message = normalizeMessage(payload.new);
+          const alreadyExists = message.id && tableChatMessages.some((item) => item.id === message.id);
+          if (alreadyExists) return;
+          tableChatMessages.push(message);
+          trimMessages(tableChatMessages);
+          if (activeTab === 'table' && isChatOpen) {
+            renderChat();
+          } else {
+            chatHeader.classList.add('blink');
+          }
+        })
+        .subscribe();
+
+      chatLobbyChannel = ctx.supabaseClient
+        .channel(`chat-lobby-observer-${tableId}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: 'scope=eq.lobby' }, (payload) => {
+          if (payload.new?.scope !== 'lobby') return;
+          const message = normalizeMessage(payload.new);
+          const alreadyExists = message.id && lobbyChatMessages.some((item) => item.id === message.id);
+          if (alreadyExists) return;
+          lobbyChatMessages.push(message);
+          trimMessages(lobbyChatMessages);
+          if (activeTab === 'lobby' && isChatOpen) {
+            renderChat();
+          } else {
+            chatHeader.classList.add('blink');
+          }
+        })
+        .subscribe();
     }
 
     renderChat();
@@ -687,6 +829,12 @@ export const observerPage = {
           }).catch(() => {});
         }
         ctx.supabaseClient?.removeChannel(observerChannel).catch(() => {});
+      }
+      if (chatTableChannel) {
+        ctx.supabaseClient?.removeChannel(chatTableChannel).catch(() => {});
+      }
+      if (chatLobbyChannel) {
+        ctx.supabaseClient?.removeChannel(chatLobbyChannel).catch(() => {});
       }
     };
   }
