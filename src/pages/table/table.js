@@ -496,8 +496,16 @@ function computeHCP(hand) {
 // Get player position from URL
 function getPlayerPosition() {
   const params = new URLSearchParams(window.location.search);
-  // Default to Marco's seat (north) when no position is provided so preview renders from his perspective
-  return params.get('position') || 'north';
+  const fromUrl = params.get('position');
+  if (fromUrl) return fromUrl;
+
+  // Fallback to window-scoped session player identity when URL params are missing
+  // (e.g. after a reset navigation).
+  const currentPlayer = getCurrentPlayer();
+  if (currentPlayer?.seat) return currentPlayer.seat;
+
+  // Keep north as final preview fallback when no player session exists.
+  return 'north';
 }
 
 function getTableId() {
@@ -506,6 +514,21 @@ function getTableId() {
   if (fromUrl) return fromUrl;
   const currentPlayer = getCurrentPlayer();
   return currentPlayer?.tableId || '1';
+}
+
+function buildTableRouteForCurrentViewer() {
+  const params = new URLSearchParams(window.location.search);
+  const currentPlayer = getCurrentPlayer();
+
+  const tableId = params.get('id') || currentPlayer?.tableId || null;
+  const position = params.get('position') || currentPlayer?.seat || null;
+
+  const nextParams = new URLSearchParams();
+  if (tableId) nextParams.set('id', String(tableId));
+  if (position) nextParams.set('position', position);
+
+  const query = nextParams.toString();
+  return query ? `/table?${query}` : '/table';
 }
 
 function getCurrentPlayer() {
@@ -1313,7 +1336,7 @@ export const tablePage = {
       }
 
       setTimeout(() => {
-        ctx.navigate('/table');
+        ctx.navigate(buildTableRouteForCurrentViewer());
       }, 150);
     };
 
@@ -3714,7 +3737,7 @@ export const tablePage = {
           console.log('✓ Table reset broadcast received');
           clearTableState();
           setTimeout(() => {
-            ctx.navigate('/table');
+            ctx.navigate(buildTableRouteForCurrentViewer());
           }, 150);
         })
         .on('broadcast', { event: 'round-reset' }, (payload) => {
