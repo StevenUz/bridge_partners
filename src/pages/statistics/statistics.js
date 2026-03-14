@@ -39,33 +39,25 @@ async function loadStatistics(root, language) {
     return;
   }
 
-  console.log('supabaseClient:', supabaseClient);
-  console.log('Starting to load statistics...');
-
   try {
     // Fetch all statistics data in parallel
-    console.log('Fetching partnerships and stats...');
     const [partnerships, allStats] = await Promise.all([
       fetchPartnerships(),
       fetchAllPlayerStats()
     ]);
-
-    console.log('Partnerships data:', partnerships);
-    console.log('All stats data:', allStats);
 
     // Store data for language changes
     currentPartnerships = partnerships;
     currentStats = allStats;
 
     if (partnerships && partnerships.length > 0) {
-      console.log('Rendering partnerships table with', partnerships.length, 'rows');
       renderPartnershipsTable(root, partnerships);
     } else {
       console.warn('No partnerships data received');
     }
 
     if (allStats && allStats.length > 0) {
-      console.log('Rendering participation table with', allStats.length, 'rows');
+
       renderParticipationTable(root, allStats, language);
       renderContractsTable(root, allStats);
       renderScoringTable(root, allStats);

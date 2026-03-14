@@ -333,7 +333,11 @@ try {
   });
 } catch (error) {
   console.error('Failed to initialize app:', error);
-  app.innerHTML = '<div style="padding: 20px; background: red; color: white;">Error loading app: ' + error.message + '</div>';
+  const errEl = document.createElement('div');
+  errEl.style.cssText = 'padding: 20px; background: red; color: white;';
+  errEl.textContent = 'Error loading app: ' + error.message;
+  app.innerHTML = '';
+  app.appendChild(errEl);
 }
 
 // Pre-register routes for dev tools reference

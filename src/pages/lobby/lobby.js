@@ -2,6 +2,19 @@ import template from './lobby.html?raw';
 import './lobby.css';
 import { applyTranslations, languages } from '../../i18n/i18n.js';
 
+/**
+ * Escape HTML special characters to prevent XSS.
+ */
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 // Simple in-memory chat for the lobby
 const lobbyChatMessages = [];
 let seedingInProgress = false;
@@ -85,7 +98,7 @@ export const lobbyPage = {
     function renderChat() {
       const lastMessages = lobbyChatMessages.slice(-15);
       chatBody.innerHTML = lastMessages
-        .map((msg) => `<div class="chat-message"><strong>${msg.author}:</strong> ${msg.text}</div>`)
+        .map((msg) => `<div class="chat-message"><strong>${escapeHtml(msg.author)}:</strong> ${escapeHtml(msg.text)}</div>`)
         .join('');
       chatBody.scrollTop = chatBody.scrollHeight;
     }

@@ -3,6 +3,19 @@ import '../table/table-cards.css';
 import { applyTranslations } from '../../i18n/i18n.js';
 import { createCardElement } from '../table/card-renderer.js';
 
+/**
+ * Escape HTML special characters to prevent XSS.
+ */
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 const seatOrder = ['south', 'west', 'north', 'east'];
 const suitOrder = ['C', 'D', 'H', 'S', 'NT'];
 
@@ -243,9 +256,9 @@ export const observerPage = {
         // North and South on one line; West and East on two lines with center align
         if (['west', 'east'].includes(slotName)) {
           nameLabel.style.textAlign = 'center';
-          nameLabel.innerHTML = `${positionLabels[seatName]}<br>${currentTable.players[seatName]}: ${hcpScores[seatName]}`;
+          nameLabel.innerHTML = `${positionLabels[seatName]}<br>${escapeHtml(currentTable.players[seatName])}: ${hcpScores[seatName]}`;
         } else {
-          nameLabel.innerHTML = `${positionLabels[seatName]} – ${currentTable.players[seatName]}: ${hcpScores[seatName]}`;
+          nameLabel.innerHTML = `${positionLabels[seatName]} – ${escapeHtml(currentTable.players[seatName])}: ${hcpScores[seatName]}`;
         }
         
         container.appendChild(nameLabel);
@@ -509,7 +522,7 @@ export const observerPage = {
     const renderChat = () => {
       const source = activeTab === 'table' ? tableChatMessages : lobbyChatMessages;
       chatBody.innerHTML = source
-        .map((msg) => `<div class="chat-message"><strong>${msg.author}:</strong> ${msg.text}</div>`)
+        .map((msg) => `<div class="chat-message"><strong>${escapeHtml(msg.author)}:</strong> ${escapeHtml(msg.text)}</div>`)
         .join('');
       chatBody.scrollTop = chatBody.scrollHeight;
     };

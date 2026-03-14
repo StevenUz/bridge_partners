@@ -14,6 +14,19 @@ import {
   dbCycleToLocal 
 } from '../../bridge/imp-cycle.js';
 
+/**
+ * Escape HTML special characters to prevent XSS.
+ */
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 const seatOrder = ['south', 'west', 'north', 'east'];
 const suitOrder = ['C', 'D', 'H', 'S', 'NT'];
 
@@ -1060,7 +1073,7 @@ export const tablePage = {
       const maxRows = Math.max(...columnOrder.map(seat => bidsBySeat[seat].length), 1);
 
       const header = columnOrder
-        .map((seat) => `<th>${getSeatPlayerName(seat)}</th>`)
+        .map((seat) => `<th>${escapeHtml(getSeatPlayerName(seat))}</th>`)
         .join('');
 
       const rows = [];
@@ -2467,15 +2480,15 @@ export const tablePage = {
         if (['west', 'east'].includes(slot)) {
           nameLabel.style.textAlign = 'center';
           if (shouldShowHcp(seat)) {
-            nameLabel.innerHTML = `${positionLabels[seat]}<br>${getSeatPlayerName(seat)}: ${hcpScores[seat]}`;
+            nameLabel.innerHTML = `${positionLabels[seat]}<br>${escapeHtml(getSeatPlayerName(seat))}: ${hcpScores[seat]}`;
           } else {
-            nameLabel.innerHTML = `${positionLabels[seat]}<br>${getSeatPlayerName(seat)}`;
+            nameLabel.innerHTML = `${positionLabels[seat]}<br>${escapeHtml(getSeatPlayerName(seat))}`;
           }
         } else {
           if (shouldShowHcp(seat)) {
-            nameLabel.innerHTML = `${positionLabels[seat]} – ${getSeatPlayerName(seat)}: ${hcpScores[seat]}`;
+            nameLabel.innerHTML = `${positionLabels[seat]} – ${escapeHtml(getSeatPlayerName(seat))}: ${hcpScores[seat]}`;
           } else {
-            nameLabel.innerHTML = `${positionLabels[seat]} – ${getSeatPlayerName(seat)}`;
+            nameLabel.innerHTML = `${positionLabels[seat]} – ${escapeHtml(getSeatPlayerName(seat))}`;
           }
         }
         container.appendChild(nameLabel);
@@ -2906,16 +2919,16 @@ export const tablePage = {
           // Side players: text on two lines, centered
           nameLabel.style.textAlign = 'center';
           if (shouldShowHcp(seatName)) {
-            nameLabel.innerHTML = `${positionLabels[seatName]}<br>${getSeatPlayerName(seatName)}: ${hcpScores[seatName]}`;
+            nameLabel.innerHTML = `${positionLabels[seatName]}<br>${escapeHtml(getSeatPlayerName(seatName))}: ${hcpScores[seatName]}`;
           } else {
-            nameLabel.innerHTML = `${positionLabels[seatName]}<br>${getSeatPlayerName(seatName)}`;
+            nameLabel.innerHTML = `${positionLabels[seatName]}<br>${escapeHtml(getSeatPlayerName(seatName))}`;
           }
         } else {
           // North and South: text on one line
           if (shouldShowHcp(seatName)) {
-            nameLabel.innerHTML = `${positionLabels[seatName]} – ${getSeatPlayerName(seatName)}: ${hcpScores[seatName]}`;
+            nameLabel.innerHTML = `${positionLabels[seatName]} – ${escapeHtml(getSeatPlayerName(seatName))}: ${hcpScores[seatName]}`;
           } else {
-            nameLabel.innerHTML = `${positionLabels[seatName]} – ${getSeatPlayerName(seatName)}`;
+            nameLabel.innerHTML = `${positionLabels[seatName]} – ${escapeHtml(getSeatPlayerName(seatName))}`;
           }
         }
         container.appendChild(nameLabel);
@@ -3316,10 +3329,10 @@ export const tablePage = {
       
       // North and South on one line; West and East on two lines with center align
       if (['west', 'east'].includes(slot)) {
-        btn.innerHTML = `${positionLabels[seat]}<br>${playerName}`;
+        btn.innerHTML = `${positionLabels[seat]}<br>${escapeHtml(playerName)}`;
         btn.style.textAlign = 'center';
       } else {
-        btn.innerHTML = `${positionLabels[seat]} – ${playerName}`;
+        btn.innerHTML = `${positionLabels[seat]} – ${escapeHtml(playerName)}`;
       }
       
       btn.type = 'button';
@@ -3386,9 +3399,9 @@ export const tablePage = {
         // Use the actual player name if seated, otherwise 'Open' (same as initial render)
         const name = currentTable.players[seat] || ctx.t('seatOpen');
         if (['west', 'east'].includes(slot)) {
-          btn.innerHTML = `${positionLabels[seat]}<br>${name}`;
+          btn.innerHTML = `${positionLabels[seat]}<br>${escapeHtml(name)}`;
         } else {
-          btn.innerHTML = `${positionLabels[seat]} – ${name}`;
+          btn.innerHTML = `${positionLabels[seat]} – ${escapeHtml(name)}`;
         }
       });
 
@@ -4042,8 +4055,8 @@ export const tablePage = {
         const northHcpLabel = document.createElement('div');
         northHcpLabel.className = 'hcp-label hcp-north';
         northHcpLabel.innerHTML = viewerSeat === topSeat
-          ? `${getSeatPlayerName(topSeat)}: ${hcpScores[topSeat]}`
-          : `${getSeatPlayerName(topSeat)}`;
+          ? `${escapeHtml(getSeatPlayerName(topSeat))}: ${hcpScores[topSeat]}`
+          : `${escapeHtml(getSeatPlayerName(topSeat))}`;
         northContainer.appendChild(northHcpLabel);
         const northHand = createCardDisplay(
           currentDeal.hands[topSeat],
@@ -4060,8 +4073,8 @@ export const tablePage = {
         const southHcpLabel = document.createElement('div');
         southHcpLabel.className = 'hcp-label hcp-south';
         southHcpLabel.innerHTML = viewerSeat === bottomSeat
-          ? `${getSeatPlayerName(bottomSeat)}: ${hcpScores[bottomSeat]}`
-          : `${getSeatPlayerName(bottomSeat)}`;
+          ? `${escapeHtml(getSeatPlayerName(bottomSeat))}: ${hcpScores[bottomSeat]}`
+          : `${escapeHtml(getSeatPlayerName(bottomSeat))}`;
         southContainer.appendChild(southHcpLabel);
         const southHand = createCardDisplay(
           currentDeal.hands[bottomSeat],
@@ -4078,8 +4091,8 @@ export const tablePage = {
         const westHcpLabel = document.createElement('div');
         westHcpLabel.className = 'hcp-label hcp-west';
         westHcpLabel.innerHTML = viewerSeat === leftSeat
-          ? `${getSeatPlayerName(leftSeat)}: ${hcpScores[leftSeat]}`
-          : `${getSeatPlayerName(leftSeat)}`;
+          ? `${escapeHtml(getSeatPlayerName(leftSeat))}: ${hcpScores[leftSeat]}`
+          : `${escapeHtml(getSeatPlayerName(leftSeat))}`;
         westContainer.appendChild(westHcpLabel);
         const westHand = createCardDisplay(
           currentDeal.hands[leftSeat],
@@ -4096,8 +4109,8 @@ export const tablePage = {
         const eastHcpLabel = document.createElement('div');
         eastHcpLabel.className = 'hcp-label hcp-east';
         eastHcpLabel.innerHTML = viewerSeat === rightSeat
-          ? `${getSeatPlayerName(rightSeat)}: ${hcpScores[rightSeat]}`
-          : `${getSeatPlayerName(rightSeat)}`;
+          ? `${escapeHtml(getSeatPlayerName(rightSeat))}: ${hcpScores[rightSeat]}`
+          : `${escapeHtml(getSeatPlayerName(rightSeat))}`;
         eastContainer.appendChild(eastHcpLabel);
         const eastHand = createCardDisplay(
           currentDeal.hands[rightSeat],
@@ -4481,7 +4494,7 @@ export const tablePage = {
       const source = activeTab === 'table' ? tableChatMessages : lobbyChatMessages;
       const lastMessages = source.slice(-MAX_CHAT_MESSAGES);
       chatBody.innerHTML = lastMessages
-        .map((msg) => `<div class="chat-message"><strong>${msg.author}:</strong> ${msg.text}</div>`)
+        .map((msg) => `<div class="chat-message"><strong>${escapeHtml(msg.author)}:</strong> ${escapeHtml(msg.text)}</div>`)
         .join('');
       chatBody.scrollTop = chatBody.scrollHeight;
       chatHeader.classList.remove('blink');
